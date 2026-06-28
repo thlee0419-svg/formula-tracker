@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍼 분유 기록</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f3;
+    --surface: #ffffff;
+    --surface-muted: #f0efec;
+    --border: rgba(0,0,0,0.1);
+    --text: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --accent: #2a78d6;
+    --accent-bg: #e6f1fb;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --surface: #242422;
+      --surface-muted: #2c2c2a;
+      --border: rgba(255,255,255,0.1);
+      --text: #f0efe9;
+      --text-secondary: #b0afa8;
+      --text-muted: #6b6a66;
+      --accent: #4a90e2;
+      --accent-bg: #1a2d42;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 1.5rem; }
+
+  /* 설정 배너 */
+  .setup-banner { background: #fef3cd; border: 1px solid #f0c940; border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: none; }
+  .setup-banner.visible { display: block; }
+  .setup-banner p { font-size: 13px; color: #7a5f00; margin-bottom: 8px; font-weight: 500; }
+  .setup-row { display: flex; gap: 8px; }
+  .setup-row input { flex: 1; padding: 8px 10px; border: 1px solid #f0c940; border-radius: 6px; font-size: 13px; background: #fff; color: #333; }
+  .setup-row button { padding: 8px 14px; background: #f0c940; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: #5a4500; white-space: nowrap; }
+
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .card-label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 1rem; }
+
+  .input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; }
+  @media (max-width: 480px) { .input-grid { grid-template-columns: 1fr 1fr; } .input-grid .add-btn { grid-column: 1 / -1; } }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--text-muted); }
+  .field input { padding: 8px 10px; border: 0.5px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text); width: 100%; outline: none; }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(42,120,214,0.15); }
+  .add-btn { padding: 9px 18px; background: var(--text); color: var(--surface); border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
+  .add-btn:hover { opacity: 0.8; }
+  .add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+  .stat { background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+  .stat-value { font-size: 20px; font-weight: 600; color: var(--text); }
+  .stat-unit { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--border); margin-bottom: 1.1rem; }
+  .tab { font-size: 13px; font-weight: 500; color: var(--text-muted); padding: 7px 13px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; transition: color .15s; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+  .chart-wrap { position: relative; width: 100%; height: 250px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 500; color: var(--text-muted); padding: 6px 8px; border-bottom: 0.5px solid var(--border); font-size: 12px; }
+  td { padding: 9px 8px; border-bottom: 0.5px solid var(--border); color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  .date-row td { font-size: 12px; font-weight: 500; color: var(--text-secondary); background: var(--surface-muted); padding: 5px 8px; }
+  .badge { display: inline-block; background: var(--accent-bg); color: var(--accent); font-size: 11px; font-weight: 500; border-radius: 99px; padding: 2px 8px; margin-left: 6px; }
+  .del-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 6px; line-height: 1; }
+  .del-btn:hover { color: #e24b4a; background: #fcebeb; }
+
+  .empty { text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
+  .syncing { font-size: 12px; color: var(--text-muted); text-align: right; margin-top: 6px; min-height: 18px; }
+  .syncing.error { color: #e24b4a; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🍼 분유 기록</h1>
+  <p class="subtitle">날짜와 시각별로 먹인 분유량을 기록하고 변화를 확인하세요</p>
+
+  <div class="setup-banner" id="setupBanner">
+    <p>⚙️ Google Sheets 연동 URL을 입력해 주세요 (한 번만 설정하면 모든 기기에서 공유돼요)</p>
+    <div class="setup-row">
+      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+      <button onclick="saveScriptUrl()">저장</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">기록 추가</div>
+    <div class="input-grid">
+      <div class="field"><label>날짜</label><input type="date" id="inputDate"></div>
+      <div class="field"><label>시각</label><input type="time" id="inputTime"></div>
+      <div class="field"><label>양 (ml)</label><input type="number" id="inputAmount" min="0" max="300" step="5" placeholder="예: 80"></div>
+      <button class="add-btn" id="addBtn" onclick="addEntry()">추가</button>
+    </div>
+    <div class="syncing" id="syncMsg"></div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="stat-label">오늘 총량</div><div class="stat-value" id="statToday">0 <span class="stat-unit">ml</span></div></div>
+    <div class="stat"><div class="stat-label">오늘 횟수</div><div class="stat-value" id="statCount">0 <span class="stat-unit">회</span></div></div>
+    <div class="stat"><div class="stat-label">평균 (7일)</div><div class="stat-value" id="statAvg">- <span class="stat-unit">ml</span></div></div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('chart', this)">일별 누적</button>
+      <button class="tab" onclick="switchTab('perFeed', this)">횟수별 추이</button>
+      <button class="tab" onclick="switchTab('log', this)">기록 목록</button>
+    </div>
+    <div id="tabChart">
+      <div class="chart-wrap"><canvas id="dailyChart" role="img" aria-label="일별 누적 분유량 막대 차트">일별 분유 누적 총량</canvas></div>
+      <div class="legend" id="chartLegend"></div>
+    </div>
+    <div id="tabPerFeed" style="display:none">
+      <div class="chart-wrap"><canvas id="feedChart" role="img" aria-label="수유 횟수별 추이 꺾은선 차트">수유 기록 추이</canvas></div>
+    </div>
+    <div id="tabLog" style="display:none">
+      <div id="logContent"><div class="empty">아직 기록이 없습니다.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const FEED_COLORS = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#eb6834','#e87ba4','#008300'];
+let entries = [];
+let dailyChart = null, feedChart = null, activeTab = 'chart';
+let SCRIPT_URL = localStorage.getItem('formulaScriptUrl') || '';
+
+function today() { return new Date().toISOString().slice(0,10); }
+function nowTime() { const d=new Date(); return d.toTimeString().slice(0,5); }
+
+document.getElementById('inputDate').value = today();
+document.getElementById('inputTime').value = nowTime();
+
+// 설정 배너
+function checkSetup() {
+  document.getElementById('setupBanner').classList.toggle('visible', !SCRIPT_URL);
+}
+function saveScriptUrl() {
+  const url = document.getElementById('scriptUrlInput').value.trim();
+  if (!url.startsWith('https://script.google.com')) { alert('올바른 URL이 아닙니다.'); return; }
+  SCRIPT_URL = url;
+  localStorage.setItem('formulaScriptUrl', url);
+  document.getElementById('setupBanner').classList.remove('visible');
+  loadEntries();
+}
+
+function setSyncMsg(msg, isError=false) {
+  const el = document.getElementById('syncMsg');
+  el.textContent = msg;
+  el.className = 'syncing' + (isError ? ' error' : '');
+}
+
+async function loadEntries() {
+  if (!SCRIPT_URL) { checkSetup(); return; }
+  setSyncMsg('불러오는 중...');
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=getAll`);
+    const data = await res.json();
+    entries = (data.entries || []).map(e => ({ ...e, amount: Number(e.amount) }));
+    entries.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+    setSyncMsg('');
+    render();
+  } catch(e) {
+    setSyncMsg('불러오기 실패. URL을 확인해 주세요.', true);
+  }
+}
+
+async function addEntry() {
+  const date = document.getElementById('inputDate').value;
+  const time = document.getElementById('inputTime').value;
+  const amount = parseInt(document.getElementById('inputAmount').value);
+  if (!date || !time || !amount || amount <= 0) { alert('날짜, 시각, 양을 모두 입력해 주세요.'); return; }
+  const entry = { id: Date.now(), date, time, amount };
+  document.getElementById('addBtn').disabled = true;
+  setSyncMsg('저장 중...');
+  try {
+    await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify({ action:'add', ...entry }) });
+    entries.push(entry);
+    entries.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+    document.getElementById('inputAmount').value = '';
+    document.getElementById('inputTime').value = nowTime();
+    setSyncMsg('저장됨 ✓');
+    setTimeout(() => setSyncMsg(''), 2000);
+    render();
+  } catch(e) {
+    setSyncMsg('저장 실패. 다시 시도해 주세요.', true);
+  }
+  document.getElementById('addBtn').disabled = false;
+}
+
+async function deleteEntry(id) {
+  if (!confirm('이 기록을 삭제할까요?')) return;
+  setSyncMsg('삭제 중...');
+  try {
+    await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify({ action:'delete', id }) });
+    entries = entries.filter(e => String(e.id) !== String(id));
+    setSyncMsg('삭제됨 ✓');
+    setTimeout(() => setSyncMsg(''), 2000);
+    render();
+  } catch(e) {
+    setSyncMsg('삭제 실패.', true);
+  }
+}
+
+function getDailyTotals() {
+  const map = {};
+  entries.forEach(e => {
+    if (!map[e.date]) map[e.date] = { total:0, count:0, feeds:[] };
+    map[e.date].total += e.amount;
+    map[e.date].count += 1;
+    map[e.date].feeds.push(e.amount);
+  });
+  return map;
+}
+
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.getElementById('tabChart').style.display = tab==='chart' ? '' : 'none';
+  document.getElementById('tabPerFeed').style.display = tab==='perFeed' ? '' : 'none';
+  document.getElementById('tabLog').style.display = tab==='log' ? '' : 'none';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (tab==='chart') renderDailyChart();
+  else if (tab==='perFeed') renderFeedChart();
+  else renderLog();
+}
+
+function renderStats() {
+  const map = getDailyTotals();
+  const td = today();
+  const todayData = map[td] || { total:0, count:0 };
+  document.getElementById('statToday').innerHTML = `${todayData.total} <span class="stat-unit">ml</span>`;
+  document.getElementById('statCount').innerHTML = `${todayData.count} <span class="stat-unit">회</span>`;
+  const dates = Object.keys(map).sort().slice(-7);
+  const avg = dates.length ? Math.round(dates.reduce((s,d)=>s+map[d].total,0)/dates.length) : null;
+  document.getElementById('statAvg').innerHTML = avg!=null ? `${avg} <span class="stat-unit">ml</span>` : `- <span class="stat-unit">ml</span>`;
+}
+
+function renderDailyChart() {
+  const map = getDailyTotals();
+  const dates = Object.keys(map).sort().slice(-14);
+  const maxFeeds = dates.reduce((m,d) => Math.max(m, map[d].feeds.length), 0);
+  const datasets = Array.from({length: maxFeeds}, (_, i) => ({
+    label: `${i+1}회`,
+    data: dates.map(d => map[d].feeds[i] ?? null),
+    backgroundColor: FEED_COLORS[i % FEED_COLORS.length],
+    borderRadius: i===maxFeeds-1 ? {topLeft:4,topRight:4,bottomLeft:0,bottomRight:0} : 0,
+    borderSkipped: false,
+    stack: 'stack0',
+  }));
+  const labels = dates.map(d => { const p=d.split('-'); return `${p[1]}/${p[2]}`; });
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+  if (dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(ctx, {
+    type:'bar', data:{labels, datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          title: items => dates[items[0].dataIndex].replace(/-/g,'/'),
+          label: c => ` ${c.dataset.label}: ${c.raw} ml`,
+          footer: items => `합계: ${items.reduce((s,i)=>s+(i.raw||0),0)} ml`
+        }}
+      },
+      scales:{
+        x:{stacked:true, grid:{display:false}, ticks:{color:'#898781', font:{size:11}}},
+        y:{stacked:true, grid:{color:'rgba(128,128,128,0.15)'}, ticks:{color:'#898781', font:{size:11}, callback:v=>v+'ml'}, beginAtZero:true}
+      }
+    }
+  });
+  document.getElementById('chartLegend').innerHTML = datasets.map((ds,i) =>
+    `<div class="legend-item"><span class="legend-dot" style="background:${FEED_COLORS[i%FEED_COLORS.length]}"></span>${ds.label}</div>`
+  ).join('');
+}
+
+function renderFeedChart() {
+  const recent = entries.slice(-30);
+  const ctx = document.getElementById('feedChart').getContext('2d');
+  if (feedChart) feedChart.destroy();
+  feedChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: recent.map(e=>`${e.date.slice(5)} ${e.time}`),
+      datasets:[{
+        label:'수유량 (ml)', data:recent.map(e=>e.amount),
+        borderColor:'#1baf7a', backgroundColor:'rgba(27,175,122,0.08)',
+        borderWidth:2, pointRadius:4, pointBackgroundColor:'#1baf7a', fill:true, tension:0.3,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.raw} ml`}}},
+      scales:{
+        x:{grid:{display:false}, ticks:{color:'#898781', font:{size:10}, maxRotation:45, autoSkip:true, maxTicksLimit:10}},
+        y:{grid:{color:'rgba(128,128,128,0.15)'}, ticks:{color:'#898781', font:{size:11}, callback:v=>v+'ml'}, beginAtZero:true}
+      }
+    }
+  });
+}
+
+function renderLog() {
+  const map = getDailyTotals();
+  if (!entries.length) { document.getElementById('logContent').innerHTML='<div class="empty">아직 기록이 없습니다.<br>위에서 분유량을 추가해 보세요.</div>'; return; }
+  const byDate = {};
+  entries.forEach(e => { if(!byDate[e.date]) byDate[e.date]=[]; byDate[e.date].push(e); });
+  const dates = Object.keys(byDate).sort().reverse();
+  let html = '<table><thead><tr><th>시각</th><th>양</th><th></th></tr></thead><tbody>';
+  dates.forEach(d => {
+    const p=d.split('-');
+    html += `<tr class="date-row"><td colspan="3">${p[0]}년 ${p[1]}월 ${p[2]}일 <span class="badge">합계 ${map[d].total}ml</span></td></tr>`;
+    byDate[d].slice().reverse().forEach(e => {
+      html += `<tr><td>${e.time}</td><td>${e.amount} ml</td><td><button class="del-btn" onclick="deleteEntry(${e.id})" title="삭제">✕</button></td></tr>`;
+    });
+  });
+  html += '</tbody></table>';
+  document.getElementById('logContent').innerHTML = html;
+}
+
+function render() {
+  renderStats();
+  if (activeTab==='chart') renderDailyChart();
+  else if (activeTab==='perFeed') renderFeedChart();
+  else renderLog();
+}
+
+checkSetup();
+loadEntries();
+</script>
+</body>
+</html>
