@@ -81,6 +81,7 @@
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; background: var(--c); }
   .del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 6px; }
   .del:hover { color: var(--up); }
+  .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
   .tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; }
@@ -131,6 +132,23 @@
   </div>
 
   <div class="card">
+    <div class="card-label">월별 누적 성과</div>
+    <div class="tabs" id="mTabs"></div>
+    <div class="chart-wrap" style="height:260px"><canvas id="monthChart" role="img" aria-label="월별 누적 손익 및 월간 손익 차트"></canvas></div>
+    <div class="table-scroll" id="monthly" style="margin-top:1rem"></div>
+    <div class="note">이번 달 기록은 데이터를 바꿀 때마다 자동으로 갱신되고, 다음 달이 되면 지난달 값이 그대로 남아요. 누적 총손익 = 평가손익 + 누적 실현손익, 누적 수익률 = 누적 총손익 ÷ 투자원금(근사치).</div>
+    <details style="margin-top:.75rem"><summary style="font-size:13px;cursor:pointer;color:var(--text-secondary)">지난 달 기록 직접 추가/수정</summary>
+      <div class="form-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) auto;margin-top:.75rem">
+        <div class="field"><label>월</label><input type="month" id="sMonth"></div>
+        <div class="field"><label>계좌</label><select id="sAcct"></select></div>
+        <div class="field"><label>평가금액 (원)</label><input type="number" id="sValue" min="0" step="any"></div>
+        <div class="field"><label>투자원금 (원)</label><input type="number" id="sCost" min="0" step="any"></div>
+        <button class="btn" onclick="addSnapshot()">저장</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
     <div class="card-label">보유 종목 추가</div>
     <div class="form-grid">
       <div class="field"><label>계좌</label><select id="fAcct"></select></div>
@@ -171,9 +189,9 @@ const ACCOUNTS = [
 const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
-let state = { rate: 1400, holdings: [], realized: [] };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [] };
 let SCRIPT_URL = localStorage.getItem(LS_URL) || '';
-let filter = 'all', pie = null, bar = null, saveTimer = null;
+let filter = 'all', mFilter = 'all', pie = null, bar = null, mChart = null, saveTimer = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -237,7 +255,7 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [] };
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
     input.value = '';
@@ -302,6 +320,7 @@ function compute() {
 
 /* ---------- 렌더링 ---------- */
 function render() {
+  syncSnapshot();
   const { per, total } = compute();
   document.getElementById('rate').value = state.rate;
 
@@ -328,9 +347,91 @@ function render() {
   }).join('');
 
   renderCharts(per);
+  renderMonthly();
   renderHoldings();
   renderRealized();
 }
+
+/* ---------- 월별 누적 성과 ---------- */
+const curMonth = () => new Date().toISOString().slice(0, 7);
+
+// 이번 달 스냅샷을 현재 보유 현황으로 자동 갱신 (지난달 기록은 건드리지 않음)
+function syncSnapshot() {
+  if (!state.holdings.length) return;
+  const { per } = compute();
+  const accounts = {};
+  ACCOUNTS.forEach(a => accounts[a.id] = { value: Math.round(per[a.id].value), cost: Math.round(per[a.id].cost) });
+  const m = curMonth();
+  state.snapshots = state.snapshots || [];
+  const i = state.snapshots.findIndex(x => x.month === m);
+  const next = { month: m, accounts };
+  if (i >= 0 && JSON.stringify(state.snapshots[i]) === JSON.stringify(next)) return;
+  if (i >= 0) state.snapshots[i] = next; else state.snapshots.push(next);
+  persist();
+}
+
+function addSnapshot() {
+  const month = document.getElementById('sMonth').value;
+  const acct = document.getElementById('sAcct').value;
+  const value = parseFloat(document.getElementById('sValue').value);
+  const cost = parseFloat(document.getElementById('sCost').value);
+  if (!month || !(value >= 0) || !(cost >= 0)) { alert('월, 평가금액, 투자원금을 입력해 주세요.'); return; }
+  if (month >= curMonth()) { alert('이번 달 이후는 자동으로 기록돼요. 지난 달만 직접 입력할 수 있습니다.'); return; }
+  state.snapshots = state.snapshots || [];
+  let snap = state.snapshots.find(x => x.month === month);
+  if (!snap) { snap = { month, accounts: {} }; state.snapshots.push(snap); }
+  snap.accounts[acct] = { value: Math.round(value), cost: Math.round(cost) };
+  document.getElementById('sValue').value = ''; document.getElementById('sCost').value = '';
+  persist(); render();
+}
+function delSnapshot(month) {
+  if (!confirm(`${month} 기록을 삭제할까요?`)) return;
+  state.snapshots = state.snapshots.filter(x => x.month !== month); persist(); render();
+}
+function setMFilter(f) { mFilter = f; renderMonthly(); }
+
+function monthlyRows() {
+  const ids = mFilter === 'all' ? ACCOUNTS.map(a => a.id) : [mFilter];
+  const snaps = (state.snapshots || []).slice().sort((a, b) => a.month.localeCompare(b.month));
+  let prev = null;
+  return snaps.map(sn => {
+    let value = 0, cost = 0;
+    ids.forEach(id => { const x = sn.accounts[id]; if (x) { value += x.value; cost += x.cost; } });
+    let realized = 0;
+    state.realized.forEach(r => { if (ids.includes(r.account) && r.date.slice(0, 7) <= sn.month) realized += toKRW(r.amount, r.account); });
+    const total = value - cost + realized;
+    const row = { month: sn.month, value, cost, total, ret: cost ? total / cost * 100 : 0, delta: prev === null ? null : total - prev };
+    prev = total;
+    return row;
+  });
+}
+
+function renderMonthly() {
+  const tabs = [{ id: 'all', name: '전체' }, ...ACCOUNTS];
+  document.getElementById('mTabs').innerHTML = tabs.map(t => `<button class="tab ${mFilter === t.id ? 'active' : ''}" onclick="setMFilter('${t.id}')">${t.name}</button>`).join('');
+  const sa = document.getElementById('sAcct'); if (!sa.options.length) sa.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  const rows = monthlyRows();
+  if (mChart) { mChart.destroy(); mChart = null; }
+  if (!rows.length) { document.getElementById('monthly').innerHTML = '<div class="empty">아직 월별 기록이 없습니다.<br>종목을 추가하면 이번 달 기록이 자동으로 시작돼요.</div>'; return; }
+  if (typeof Chart !== 'undefined') {
+    const tc = cssVar('--text-muted');
+    mChart = new Chart(document.getElementById('monthChart'), {
+      data: { labels: rows.map(r => r.month), datasets: [
+        { type: 'line', label: '누적 총손익', data: rows.map(r => Math.round(r.total)), borderColor: cssVar('--accent'), backgroundColor: cssVar('--accent'), borderWidth: 2, pointRadius: 4, tension: 0.25, order: 1 },
+        { type: 'bar', label: '월간 손익', data: rows.map(r => r.delta === null ? null : Math.round(r.delta)), backgroundColor: rows.map(r => (r.delta || 0) >= 0 ? cssVar('--up') : cssVar('--down')), borderRadius: 3, order: 2 } ] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { color: tc, boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${signKRW(c.raw)}` } } },
+        scales: { x: { grid: { display: false }, ticks: { color: tc, font: { size: 11 } } },
+                  y: { grid: { color: 'rgba(128,128,128,0.15)' }, ticks: { color: tc, font: { size: 11 }, callback: v => (v / 10000).toLocaleString('ko-KR') + '만' } } } }
+    });
+  }
+  document.getElementById('monthly').innerHTML = `<table><thead><tr><th>월</th><th>평가금액</th><th>투자원금</th><th>누적 총손익</th><th>누적 수익률</th><th>월간 손익</th><th></th></tr></thead><tbody>` +
+    rows.slice().reverse().map(r => `<tr><td>${r.month}</td><td>${fmtKRW(r.value)}</td><td>${fmtKRW(r.cost)}</td>
+      <td class="${cls(r.total)}">${signKRW(r.total)}</td><td class="${cls(r.ret)}">${fmtPct(r.ret)}</td>
+      <td class="${cls(r.delta || 0)}">${r.delta === null ? '-' : signKRW(r.delta)}</td>
+      <td>${r.month === curMonth() ? '<span class="tag">진행 중</span>' : `<button class="del" onclick="delSnapshot('${r.month}')" title="삭제">✕</button>`}</td></tr>`).join('') + '</tbody></table>';
+}
+
 
 function renderCharts(per) {
   const tc = cssVar('--text-muted'), surface = cssVar('--surface');
