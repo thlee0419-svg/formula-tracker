@@ -227,8 +227,9 @@ async function load() {
   try {
     const res = await fetch(`${SCRIPT_URL}?action=load`);
     const data = await res.json();
-    if (data && data.state) { state = { ...state, ...data.state }; localStorage.setItem(LS_KEY, JSON.stringify(state)); }
-    setSync('');
+    if (data && data.state) { state = { ...state, ...data.state }; localStorage.setItem(LS_KEY, JSON.stringify(state)); setSync(''); }
+    else if (state.holdings.length || state.realized.length) persist(); // 시트가 비어 있으면 이 브라우저의 데이터를 올림
+    else setSync('');
   } catch (e) { setSync('시트 불러오기 실패. 이 브라우저의 저장본을 표시합니다.', true); }
   render();
 }
