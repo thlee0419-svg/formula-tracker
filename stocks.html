@@ -86,6 +86,11 @@
   .summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important; }
   td input.sec { width: 110px; text-align: left; padding: 4px 6px; font-size: 13px; }
   .hold th:nth-child(3), .hold td:nth-child(3) { text-align: left; }
+  .row-add { display: flex; gap: 8px; max-width: 420px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: .75rem; }
+  .chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; padding: 3px 4px 3px 10px; border: 0.5px solid var(--border); border-radius: 99px; background: var(--surface-muted); color: var(--text-secondary); }
+  .chip button { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 12px; padding: 2px 5px; border-radius: 6px; }
+  .chip button:hover { color: var(--text); }
   .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
@@ -143,6 +148,13 @@
       <div class="table-scroll" id="sectors"></div>
     </div>
     <div class="note">전체 자산 = 보유 종목 평가금액 + 현금 잔고. 섹터는 아래 보유 종목 표에서 종목별로 바로 고칠 수 있어요. 비워 두면 "미분류"로 묶여요.</div>
+    <div class="card-label" style="margin:1.25rem 0 .6rem">섹터 목록 관리</div>
+    <div class="row-add">
+      <input id="newSector" placeholder="새 섹터 이름 (예: 로봇/AI)" onkeydown="if(event.key==='Enter')addSector()">
+      <button class="btn" onclick="addSector()">섹터 추가</button>
+    </div>
+    <div class="chips" id="sectorChips"></div>
+    <div class="note">여기서 추가한 섹터는 종목 입력창의 추천 목록에 나와요. ✎로 이름을 바꾸면 그 섹터의 종목도 함께 바뀌고, ✕로 지우면 해당 종목은 "미분류"가 돼요.</div>
   </div>
 
   <div class="card">
@@ -211,7 +223,7 @@
   </div>
 </div>
 
-<datalist id="sectorList"><option value="반도체"><option value="IT/소프트웨어"><option value="인터넷/플랫폼"><option value="2차전지"><option value="자동차"><option value="바이오/헬스케어"><option value="금융"><option value="에너지"><option value="소비재"><option value="통신"><option value="산업재"><option value="방산"><option value="부동산/리츠"><option value="ETF(지수)"><option value="ETF(섹터)"><option value="기타"></datalist>
+<datalist id="sectorList"></datalist>
 
 <script>
 const ACCOUNTS = [
@@ -223,11 +235,13 @@ const ACCOUNTS = [
 const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
+const DEFAULT_SECTORS = ['반도체','IT/소프트웨어','인터넷/플랫폼','2차전지','자동차','바이오/헬스케어','금융','에너지','소비재','통신','산업재','방산','부동산/리츠','ETF(지수)','ETF(섹터)','기타'];
 let state = { rate: 1400, holdings: [], realized: [], snapshots: [], flows: [], cash: {} };
 function normalize() {
   state.holdings = state.holdings || []; state.realized = state.realized || [];
   state.snapshots = state.snapshots || []; state.flows = state.flows || [];
   state.cash = state.cash || {};
+  if (!Array.isArray(state.sectors)) state.sectors = DEFAULT_SECTORS.slice();
 }
 let SCRIPT_URL = localStorage.getItem(LS_URL) || '';
 let filter = 'all', mFilter = 'all', pie = null, bar = null, mChart = null, sectorChart = null, saveTimer = null;
@@ -318,13 +332,14 @@ function addHolding() {
   let cur = parseFloat(document.getElementById('fCur').value);
   if (!name || !(qty > 0) || !(avg >= 0)) { alert('종목명, 수량, 평균 매수가를 입력해 주세요.'); return; }
   if (!(cur >= 0)) cur = avg;
+  ensureSector(sector);
   state.holdings.push({ id: uid(), account: acct, name, ticker, sector, qty, avg, cur });
   ['fName','fTicker','fSector','fQty','fAvg','fCur'].forEach(i => document.getElementById(i).value = '');
   persist(); render();
 }
 function updateSector(id, v) {
   const h = state.holdings.find(x => x.id === id);
-  if (h) { h.sector = v.trim(); persist(); render(); }
+  if (h) { h.sector = v.trim(); ensureSector(h.sector); persist(); render(); }
 }
 function updateCur(id, v) {
   const h = state.holdings.find(x => x.id === id); const n = parseFloat(v);
@@ -412,6 +427,7 @@ function render() {
   }).join('');
 
   renderCharts(per);
+  renderSectorManager();
   renderSectors();
   renderMonthly();
   renderHoldings();
@@ -593,6 +609,49 @@ function renderHoldings() {
       <td class="${cls(pnl)}">${(pnl > 0 ? '+' : '') + fmtNum(pnl, a.cur)}</td>
       <td class="${cls(ret)}">${fmtPct(ret)}</td>
       <td><button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>';
+}
+
+/* ---------- 섹터 목록 관리 ---------- */
+function allSectors() {
+  const set = new Set(state.sectors);
+  state.holdings.forEach(h => { const x = (h.sector || '').trim(); if (x) set.add(x); });
+  return [...set];
+}
+function ensureSector(name) {
+  name = (name || '').trim();
+  if (name && !state.sectors.includes(name)) state.sectors.push(name);
+}
+function addSector() {
+  const input = document.getElementById('newSector');
+  const name = input.value.trim();
+  if (!name) return;
+  if (allSectors().includes(name)) { alert('이미 있는 섹터예요.'); return; }
+  state.sectors.push(name); input.value = '';
+  persist(); render();
+}
+function renameSector(i) {
+  const old = allSectors()[i];
+  const name = (prompt(`"${old}" 섹터의 새 이름`, old) || '').trim();
+  if (!name || name === old) return;
+  if (allSectors().includes(name) && !confirm(`"${name}" 섹터가 이미 있어요. 두 섹터를 합칠까요?`)) return;
+  state.sectors = state.sectors.filter(x => x !== old && x !== name); state.sectors.push(name);
+  state.holdings.forEach(h => { if ((h.sector || '').trim() === old) h.sector = name; });
+  persist(); render();
+}
+function deleteSector(i) {
+  const name = allSectors()[i];
+  const used = state.holdings.filter(h => (h.sector || '').trim() === name).length;
+  if (!confirm(used ? `"${name}" 섹터를 지울까요? 이 섹터의 종목 ${used}개는 "미분류"가 돼요.` : `"${name}" 섹터를 지울까요?`)) return;
+  state.sectors = state.sectors.filter(x => x !== name);
+  state.holdings.forEach(h => { if ((h.sector || '').trim() === name) h.sector = ''; });
+  persist(); render();
+}
+function renderSectorManager() {
+  const list = allSectors();
+  document.getElementById('sectorList').innerHTML = list.map(x => `<option value="${esc(x)}">`).join('');
+  const count = n => state.holdings.filter(h => (h.sector || '').trim() === n).length;
+  document.getElementById('sectorChips').innerHTML = list.map((n, i) =>
+    `<span class="chip">${esc(n)}${count(n) ? ` · ${count(n)}` : ''}<button onclick="renameSector(${i})" title="이름 변경">✎</button><button onclick="deleteSector(${i})" title="삭제">✕</button></span>`).join('');
 }
 
 const SECTOR_COLORS = ['#2a78d6','#1baf7a','#eda100','#8a6ae0','#e34948','#eb6834','#e87ba4','#008300','#12a2b8','#a4743a'];
