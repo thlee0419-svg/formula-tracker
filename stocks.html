@@ -67,7 +67,7 @@
   .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .chart-wrap { position: relative; height: 240px; }
 
-  .form-grid { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr) auto; gap: 8px; align-items: end; }
+  .form-grid { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(0,1.2fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.7fr) minmax(0,1fr) minmax(0,1fr) auto; gap: 8px; align-items: end; }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field label { font-size: 11px; color: var(--text-muted); }
 
@@ -84,6 +84,8 @@
   .cash-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
   @media (max-width: 760px) { .cash-grid { grid-template-columns: 1fr 1fr; } }
   .summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important; }
+  td input.sec { width: 110px; text-align: left; padding: 4px 6px; font-size: 13px; }
+  .hold th:nth-child(3), .hold td:nth-child(3) { text-align: left; }
   .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
@@ -135,6 +137,15 @@
   </div>
 
   <div class="card">
+    <div class="card-label">섹터별 비중 (전체 자산 대비)</div>
+    <div class="charts" style="align-items:center">
+      <div class="chart-wrap"><canvas id="sectorChart" role="img" aria-label="섹터별 비중 도넛 차트"></canvas></div>
+      <div class="table-scroll" id="sectors"></div>
+    </div>
+    <div class="note">전체 자산 = 보유 종목 평가금액 + 현금 잔고. 섹터는 아래 보유 종목 표에서 종목별로 바로 고칠 수 있어요. 비워 두면 "미분류"로 묶여요.</div>
+  </div>
+
+  <div class="card">
     <div class="card-label">월별 누적 성과</div>
     <div class="tabs" id="mTabs"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="monthChart" role="img" aria-label="월별 누적 손익 및 월간 손익 차트"></canvas></div>
@@ -158,6 +169,7 @@
       <div class="field"><label>계좌</label><select id="fAcct"></select></div>
       <div class="field"><label>종목명</label><input id="fName" placeholder="예: 삼성전자"></div>
       <div class="field"><label>티커(선택)</label><input id="fTicker" placeholder="005930"></div>
+      <div class="field"><label>섹터</label><input id="fSector" list="sectorList" placeholder="예: 반도체"></div>
       <div class="field"><label>수량</label><input type="number" id="fQty" min="0" step="any"></div>
       <div class="field"><label>평균 매수가</label><input type="number" id="fAvg" min="0" step="any"></div>
       <div class="field"><label>현재가</label><input type="number" id="fCur" min="0" step="any"></div>
@@ -199,6 +211,8 @@
   </div>
 </div>
 
+<datalist id="sectorList"><option value="반도체"><option value="IT/소프트웨어"><option value="인터넷/플랫폼"><option value="2차전지"><option value="자동차"><option value="바이오/헬스케어"><option value="금융"><option value="에너지"><option value="소비재"><option value="통신"><option value="산업재"><option value="방산"><option value="부동산/리츠"><option value="ETF(지수)"><option value="ETF(섹터)"><option value="기타"></datalist>
+
 <script>
 const ACCOUNTS = [
   { id:'nh',      name:'NH증권',     role:'국내 중장기 스윙', cur:'KRW', color:'#2a78d6' },
@@ -216,7 +230,7 @@ function normalize() {
   state.cash = state.cash || {};
 }
 let SCRIPT_URL = localStorage.getItem(LS_URL) || '';
-let filter = 'all', mFilter = 'all', pie = null, bar = null, mChart = null, saveTimer = null;
+let filter = 'all', mFilter = 'all', pie = null, bar = null, mChart = null, sectorChart = null, saveTimer = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -298,14 +312,19 @@ function addHolding() {
   const acct = document.getElementById('fAcct').value;
   const name = document.getElementById('fName').value.trim();
   const ticker = document.getElementById('fTicker').value.trim();
+  const sector = document.getElementById('fSector').value.trim();
   const qty = parseFloat(document.getElementById('fQty').value);
   const avg = parseFloat(document.getElementById('fAvg').value);
   let cur = parseFloat(document.getElementById('fCur').value);
   if (!name || !(qty > 0) || !(avg >= 0)) { alert('종목명, 수량, 평균 매수가를 입력해 주세요.'); return; }
   if (!(cur >= 0)) cur = avg;
-  state.holdings.push({ id: uid(), account: acct, name, ticker, qty, avg, cur });
-  ['fName','fTicker','fQty','fAvg','fCur'].forEach(i => document.getElementById(i).value = '');
+  state.holdings.push({ id: uid(), account: acct, name, ticker, sector, qty, avg, cur });
+  ['fName','fTicker','fSector','fQty','fAvg','fCur'].forEach(i => document.getElementById(i).value = '');
   persist(); render();
+}
+function updateSector(id, v) {
+  const h = state.holdings.find(x => x.id === id);
+  if (h) { h.sector = v.trim(); persist(); render(); }
 }
 function updateCur(id, v) {
   const h = state.holdings.find(x => x.id === id); const n = parseFloat(v);
@@ -393,6 +412,7 @@ function render() {
   }).join('');
 
   renderCharts(per);
+  renderSectors();
   renderMonthly();
   renderHoldings();
   renderFlows();
@@ -554,21 +574,56 @@ function renderHoldings() {
   document.getElementById('tabs').innerHTML = tabs.map(t => `<button class="tab ${filter === t.id ? 'active' : ''}" onclick="setFilter('${t.id}')">${t.name}</button>`).join('');
   const rows = state.holdings.filter(h => ACCT[h.account] && (filter === 'all' || h.account === filter));
   if (!rows.length) { document.getElementById('holdings').innerHTML = '<div class="empty">보유 종목이 없습니다.<br>위에서 종목을 추가해 보세요.</div>'; return; }
+  const { total } = compute();
+  const assets = total.value + total.cash;
   const items = rows.map(h => {
     const a = ACCT[h.account], cost = h.qty * h.avg, val = h.qty * h.cur, pnl = val - cost, ret = cost ? pnl / cost * 100 : 0;
     return { h, a, cost, val, pnl, ret, valKRW: toKRW(val, h.account) };
   }).sort((x, y) => y.valKRW - x.valKRW);
-  document.getElementById('holdings').innerHTML = `<table><thead><tr><th>계좌</th><th>종목</th><th>수량</th><th>평균매수가</th><th>현재가</th><th>평가금액</th><th>평가손익</th><th>수익률</th><th></th></tr></thead><tbody>` +
-    items.map(({ h, a, val, pnl, ret }) => `<tr>
+  document.getElementById('holdings').innerHTML = `<table class="hold"><thead><tr><th>계좌</th><th>종목</th><th>섹터</th><th>수량</th><th>평균매수가</th><th>현재가</th><th>평가금액</th><th>전체 비중</th><th>평가손익</th><th>수익률</th><th></th></tr></thead><tbody>` +
+    items.map(({ h, a, val, pnl, ret, valKRW }) => `<tr>
       <td><span class="dot" style="--c:${a.color}"></span>${a.name}</td>
       <td>${esc(h.name)}${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}</td>
+      <td><input class="sec" list="sectorList" value="${esc(h.sector || '')}" placeholder="미분류" onchange="updateSector('${h.id}', this.value)" aria-label="${esc(h.name)} 섹터"></td>
       <td>${h.qty.toLocaleString('ko-KR', {maximumFractionDigits:4})}</td>
       <td>${fmtNum(h.avg, a.cur)}</td>
       <td><input class="cur" type="number" step="any" value="${h.cur}" onchange="updateCur('${h.id}', this.value)" aria-label="${esc(h.name)} 현재가"></td>
       <td>${fmtNum(val, a.cur)}</td>
+      <td>${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</td>
       <td class="${cls(pnl)}">${(pnl > 0 ? '+' : '') + fmtNum(pnl, a.cur)}</td>
       <td class="${cls(ret)}">${fmtPct(ret)}</td>
       <td><button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>';
+}
+
+const SECTOR_COLORS = ['#2a78d6','#1baf7a','#eda100','#8a6ae0','#e34948','#eb6834','#e87ba4','#008300','#12a2b8','#a4743a'];
+function renderSectors() {
+  const { total } = compute();
+  const assets = total.value + total.cash;
+  const map = {};
+  state.holdings.forEach(h => {
+    if (!ACCT[h.account]) return;
+    const key = (h.sector || '').trim() || '미분류';
+    const m = map[key] || (map[key] = { name: key, value: 0, cost: 0, count: 0 });
+    m.value += toKRW(h.qty * h.cur, h.account); m.cost += toKRW(h.qty * h.avg, h.account); m.count++;
+  });
+  const list = Object.values(map).sort((a, b) => b.value - a.value);
+  if (total.cash > 0) list.push({ name: '현금', value: total.cash, cost: total.cash, count: 0, isCash: true });
+  list.forEach((x, i) => x.color = x.isCash || x.name === '미분류' ? '#9a9892' : SECTOR_COLORS[i % SECTOR_COLORS.length]);
+  if (sectorChart) { sectorChart.destroy(); sectorChart = null; }
+  if (!list.length || !assets) { document.getElementById('sectors').innerHTML = '<div class="empty">보유 종목을 추가하면 섹터별 비중이 나와요.</div>'; return; }
+  if (typeof Chart !== 'undefined') {
+    sectorChart = new Chart(document.getElementById('sectorChart'), {
+      type: 'doughnut',
+      data: { labels: list.map(x => x.name), datasets: [{ data: list.map(x => Math.round(x.value)), backgroundColor: list.map(x => x.color), borderColor: cssVar('--surface'), borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '58%',
+        plugins: { legend: { position: 'bottom', labels: { color: cssVar('--text-muted'), boxWidth: 10, font: { size: 11 } } },
+                   tooltip: { callbacks: { label: c => ` ${c.label}: ${fmtKRW(c.raw)} (${(c.raw / assets * 100).toFixed(1)}%)` } } } }
+    });
+  }
+  document.getElementById('sectors').innerHTML = `<table><thead><tr><th>섹터</th><th>평가금액</th><th>비중</th><th>종목</th><th>평가손익</th></tr></thead><tbody>` +
+    list.map(x => { const pnl = x.value - x.cost;
+      return `<tr><td><span class="dot" style="--c:${x.color}"></span>${esc(x.name)}</td><td>${fmtKRW(x.value)}</td><td>${(x.value / assets * 100).toFixed(1)}%</td>
+        <td>${x.isCash ? '-' : x.count + '개'}</td><td class="${cls(pnl)}">${x.isCash ? '-' : signKRW(pnl)}</td></tr>`; }).join('') + '</tbody></table>';
 }
 
 function renderRealized() {
