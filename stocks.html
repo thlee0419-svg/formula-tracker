@@ -81,6 +81,9 @@
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; background: var(--c); }
   .del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 6px; }
   .del:hover { color: var(--up); }
+  .cash-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+  @media (max-width: 760px) { .cash-grid { grid-template-columns: 1fr 1fr; } }
+  .summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important; }
   .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
@@ -136,13 +139,14 @@
     <div class="tabs" id="mTabs"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="monthChart" role="img" aria-label="월별 누적 손익 및 월간 손익 차트"></canvas></div>
     <div class="table-scroll" id="monthly" style="margin-top:1rem"></div>
-    <div class="note">이번 달 기록은 데이터를 바꿀 때마다 자동으로 갱신되고, 다음 달이 되면 지난달 값이 그대로 남아요. 누적 총손익 = 평가손익 + 누적 실현손익, 누적 수익률 = 누적 총손익 ÷ 투자원금(근사치).</div>
+    <div class="note">이번 달 기록은 데이터를 바꿀 때마다 자동으로 갱신되고, 다음 달이 되면 지난달 값이 그대로 남아요. 누적 총손익은 입금 기록이 있는 계좌는 입출금 기준, 없는 계좌는 평가손익 + 누적 실현손익으로 계산하고, 누적 수익률은 누적 총손익 ÷ (누적 입금 또는 투자원금)이에요.</div>
     <details style="margin-top:.75rem"><summary style="font-size:13px;cursor:pointer;color:var(--text-secondary)">지난 달 기록 직접 추가/수정</summary>
-      <div class="form-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) auto;margin-top:.75rem">
+      <div class="form-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto;margin-top:.75rem">
         <div class="field"><label>월</label><input type="month" id="sMonth"></div>
         <div class="field"><label>계좌</label><select id="sAcct"></select></div>
         <div class="field"><label>평가금액 (원)</label><input type="number" id="sValue" min="0" step="any"></div>
         <div class="field"><label>투자원금 (원)</label><input type="number" id="sCost" min="0" step="any"></div>
+        <div class="field"><label>현금 (원, 선택)</label><input type="number" id="sCash" min="0" step="any"></div>
         <button class="btn" onclick="addSnapshot()">저장</button>
       </div>
     </details>
@@ -164,6 +168,22 @@
   <div class="card">
     <div class="tabs" id="tabs"></div>
     <div class="table-scroll" id="holdings"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">입출금 · 현금 잔고</div>
+    <div class="form-grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) auto">
+      <div class="field"><label>계좌</label><select id="cAcct"></select></div>
+      <div class="field"><label>날짜</label><input type="date" id="cDate"></div>
+      <div class="field"><label>구분</label><select id="cType"><option value="in">입금</option><option value="out">출금</option></select></div>
+      <div class="field"><label>금액 (신한은 USD)</label><input type="number" id="cAmt" min="0" step="any"></div>
+      <div class="field"><label>메모</label><input id="cMemo" placeholder="예: 수익금 출금"></div>
+      <button class="btn" onclick="addFlow()">추가</button>
+    </div>
+    <div class="table-scroll" id="flows" style="margin-top:1rem"></div>
+    <div class="card-label" style="margin:1.25rem 0 .6rem">계좌별 현금 잔고 (매도 후 남겨 둔 현금)</div>
+    <div class="cash-grid" id="cashGrid"></div>
+    <div class="note">입금 기록이 있는 계좌는 <b>입출금 기준 손익 = 평가금액 + 현금 + 누적 출금 − 누적 입금</b>으로 계산해요. 그래서 수익금을 출금해도 성과가 줄지 않아요. 처음 넣은 원금도 "입금"으로 한 번 기록해 주세요. 입금 기록이 없는 계좌는 기존 방식(평가손익 + 누적 실현손익)을 그대로 써요.</div>
   </div>
 
   <div class="card">
@@ -189,7 +209,12 @@ const ACCOUNTS = [
 const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
-let state = { rate: 1400, holdings: [], realized: [], snapshots: [] };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [], flows: [], cash: {} };
+function normalize() {
+  state.holdings = state.holdings || []; state.realized = state.realized || [];
+  state.snapshots = state.snapshots || []; state.flows = state.flows || [];
+  state.cash = state.cash || {};
+}
 let SCRIPT_URL = localStorage.getItem(LS_URL) || '';
 let filter = 'all', mFilter = 'all', pie = null, bar = null, mChart = null, saveTimer = null;
 
@@ -221,14 +246,15 @@ function persist() {
 
 async function load() {
   try { const local = JSON.parse(localStorage.getItem(LS_KEY)); if (local) state = { ...state, ...local }; } catch (e) {}
+  normalize();
   render();
   if (!SCRIPT_URL) { document.getElementById('banner').classList.add('visible'); return; }
   setSync('불러오는 중...');
   try {
     const res = await fetch(`${SCRIPT_URL}?action=load`);
     const data = await res.json();
-    if (data && data.state) { state = { ...state, ...data.state }; localStorage.setItem(LS_KEY, JSON.stringify(state)); setSync(''); }
-    else if (state.holdings.length || state.realized.length) persist(); // 시트가 비어 있으면 이 브라우저의 데이터를 올림
+    if (data && data.state) { state = { ...state, ...data.state }; localStorage.setItem(LS_KEY, JSON.stringify(state)); setSync(''); normalize(); }
+    else if (state.holdings.length || state.realized.length || state.flows.length) persist(); // 시트가 비어 있으면 이 브라우저의 데이터를 올림
     else setSync('');
   } catch (e) { setSync('시트 불러오기 실패. 이 브라우저의 저장본을 표시합니다.', true); }
   render();
@@ -256,7 +282,8 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [] };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], cash: d.cash || {} };
+      normalize();
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
     input.value = '';
@@ -305,6 +332,9 @@ function delRealized(id) {
 function setFilter(f) { filter = f; render(); }
 
 /* ---------- 계산 ---------- */
+function flowSum(accId, type, upToMonth) {
+  return state.flows.reduce((sum, f) => (f.account === accId && f.type === type && (!upToMonth || f.date.slice(0, 7) <= upToMonth)) ? sum + toKRW(f.amount, accId) : sum, 0);
+}
 function compute() {
   const per = Object.fromEntries(ACCOUNTS.map(a => [a.id, { value:0, cost:0, realized:0 }]));
   state.holdings.forEach(h => {
@@ -313,9 +343,20 @@ function compute() {
     per[h.account].cost  += toKRW(h.qty * h.avg, h.account);
   });
   state.realized.forEach(r => { if (per[r.account]) per[r.account].realized += toKRW(r.amount, r.account); });
-  const total = { value:0, cost:0, realized:0 };
-  Object.values(per).forEach(p => { p.unreal = p.value - p.cost; p.ret = p.cost ? p.unreal / p.cost * 100 : 0; for (const k in total) total[k] += p[k]; });
+  const total = { value:0, cost:0, realized:0, cash:0, dep:0, wd:0, perf:0, base:0 };
+  ACCOUNTS.forEach(a => {
+    const p = per[a.id];
+    p.cash = toKRW(Number(state.cash[a.id]) || 0, a.id);
+    p.dep = flowSum(a.id, 'in'); p.wd = flowSum(a.id, 'out');
+    p.hasDep = state.flows.some(f => f.account === a.id && f.type === 'in');
+    p.unreal = p.value - p.cost; p.ret = p.cost ? p.unreal / p.cost * 100 : 0;
+    p.perf = p.hasDep ? p.value + p.cash + p.wd - p.dep : p.unreal + p.realized;
+    p.base = p.hasDep ? p.dep : p.cost;
+    p.perfRet = p.base ? p.perf / p.base * 100 : 0;
+    for (const k of ['value','cost','realized','cash','dep','wd','perf','base']) total[k] += p[k];
+  });
   total.unreal = total.value - total.cost; total.ret = total.cost ? total.unreal / total.cost * 100 : 0;
+  total.perfRet = total.base ? total.perf / total.base * 100 : 0;
   return { per, total };
 }
 
@@ -326,15 +367,16 @@ function render() {
   document.getElementById('rate').value = state.rate;
 
   const fill = (id) => { const s = document.getElementById(id); if (!s.options.length) s.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name} (${a.role})</option>`).join(''); };
-  fill('fAcct'); fill('rAcct');
-  const rd = document.getElementById('rDate'); if (!rd.value) rd.value = new Date().toISOString().slice(0,10);
+  fill('fAcct'); fill('rAcct'); fill('cAcct');
+  const today = new Date().toISOString().slice(0,10);
+  ['rDate','cDate'].forEach(i => { const e = document.getElementById(i); if (!e.value) e.value = today; });
 
-  const totalPnl = total.unreal + total.realized;
   document.getElementById('summary').innerHTML = `
-    <div class="stat"><div class="stat-label">총 평가금액</div><div class="stat-value">${fmtKRW(total.value)}</div><div class="stat-sub" style="color:var(--text-muted)">투자원금 ${fmtKRW(total.cost)}</div></div>
+    <div class="stat"><div class="stat-label">총 평가금액</div><div class="stat-value">${fmtKRW(total.value)}</div><div class="stat-sub" style="color:var(--text-muted)">투자원금 ${fmtKRW(total.cost)}${total.cash ? ` · 현금 ${fmtKRW(total.cash)}` : ''}</div></div>
     <div class="stat"><div class="stat-label">평가손익</div><div class="stat-value ${cls(total.unreal)}">${signKRW(total.unreal)}</div><div class="stat-sub ${cls(total.unreal)}">${fmtPct(total.ret)}</div></div>
     <div class="stat"><div class="stat-label">실현손익</div><div class="stat-value ${cls(total.realized)}">${signKRW(total.realized)}</div></div>
-    <div class="stat"><div class="stat-label">총손익 (평가+실현)</div><div class="stat-value ${cls(totalPnl)}">${signKRW(totalPnl)}</div></div>`;
+    <div class="stat"><div class="stat-label">누적 출금 (회수)</div><div class="stat-value">${fmtKRW(total.wd)}</div><div class="stat-sub" style="color:var(--text-muted)">누적 입금 ${fmtKRW(total.dep)}</div></div>
+    <div class="stat"><div class="stat-label">총손익</div><div class="stat-value ${cls(total.perf)}">${signKRW(total.perf)}</div><div class="stat-sub ${cls(total.perf)}">${fmtPct(total.perfRet)}</div></div>`;
 
   document.getElementById('accounts').innerHTML = ACCOUNTS.map(a => {
     const p = per[a.id];
@@ -343,6 +385,9 @@ function render() {
       <div class="acct-value">${fmtKRW(p.value)}</div>
       <div class="acct-line ${cls(p.unreal)}">${signKRW(p.unreal)} (${fmtPct(p.ret)})</div>
       <div class="acct-line">실현 <span class="${cls(p.realized)}">${signKRW(p.realized)}</span></div>
+      ${p.cash ? `<div class="acct-line">현금 ${fmtKRW(p.cash)}</div>` : ''}
+      ${p.wd ? `<div class="acct-line">출금 누계 ${fmtKRW(p.wd)}</div>` : ''}
+      <div class="acct-line">총손익 <span class="${cls(p.perf)}">${signKRW(p.perf)} (${fmtPct(p.perfRet)})</span></div>
       <div class="acct-line">비중 ${total.value ? (p.value / total.value * 100).toFixed(1) : '0.0'}%</div>
     </div>`;
   }).join('');
@@ -350,7 +395,45 @@ function render() {
   renderCharts(per);
   renderMonthly();
   renderHoldings();
+  renderFlows();
   renderRealized();
+}
+
+/* ---------- 입출금 · 현금 ---------- */
+function addFlow() {
+  const account = document.getElementById('cAcct').value;
+  const date = document.getElementById('cDate').value;
+  const type = document.getElementById('cType').value;
+  const amount = parseFloat(document.getElementById('cAmt').value);
+  const memo = document.getElementById('cMemo').value.trim();
+  if (!date || !(amount > 0)) { alert('날짜와 금액(0보다 큰 값)을 입력해 주세요.'); return; }
+  state.flows.push({ id: uid(), account, date, type, amount, memo });
+  document.getElementById('cAmt').value = ''; document.getElementById('cMemo').value = '';
+  persist(); render();
+}
+function delFlow(id) {
+  if (!confirm('이 입출금 기록을 삭제할까요?')) return;
+  state.flows = state.flows.filter(f => f.id !== id); persist(); render();
+}
+function setCash(id, v) {
+  const n = parseFloat(v);
+  state.cash[id] = n >= 0 ? n : 0; persist(); render();
+}
+function renderFlows() {
+  const grid = document.getElementById('cashGrid');
+  if (!grid.children.length || grid.dataset.v !== JSON.stringify(state.cash)) {
+    if (!grid.contains(document.activeElement)) {
+      grid.innerHTML = ACCOUNTS.map(a => `<div class="field"><label>${a.name} (${a.cur === 'USD' ? 'USD' : '원'})</label><input type="number" min="0" step="any" value="${state.cash[a.id] || ''}" placeholder="0" onchange="setCash('${a.id}', this.value)"></div>`).join('');
+      grid.dataset.v = JSON.stringify(state.cash);
+    }
+  }
+  const rows = state.flows.filter(f => ACCT[f.account]).slice().sort((a, b) => b.date.localeCompare(a.date));
+  if (!rows.length) { document.getElementById('flows').innerHTML = '<div class="empty">입출금 기록이 없습니다.</div>'; return; }
+  document.getElementById('flows').innerHTML = `<table><thead><tr><th>날짜</th><th>계좌</th><th style="text-align:left">구분</th><th>금액</th><th style="text-align:left">메모</th><th></th></tr></thead><tbody>` +
+    rows.map(f => { const a = ACCT[f.account];
+      return `<tr><td>${esc(f.date)}</td><td style="text-align:left"><span class="dot" style="--c:${a.color}"></span>${a.name}</td>
+        <td style="text-align:left">${f.type === 'in' ? '입금' : '출금'}</td><td>${fmtNum(f.amount, a.cur)}</td><td style="text-align:left">${esc(f.memo)}</td>
+        <td><button class="del" onclick="delFlow('${f.id}')" title="삭제">✕</button></td></tr>`; }).join('') + '</tbody></table>';
 }
 
 /* ---------- 월별 누적 성과 ---------- */
@@ -358,10 +441,10 @@ const curMonth = () => new Date().toISOString().slice(0, 7);
 
 // 이번 달 스냅샷을 현재 보유 현황으로 자동 갱신 (지난달 기록은 건드리지 않음)
 function syncSnapshot() {
-  if (!state.holdings.length) return;
+  if (!state.holdings.length && !Object.values(state.cash).some(v => Number(v) > 0)) return;
   const { per } = compute();
   const accounts = {};
-  ACCOUNTS.forEach(a => accounts[a.id] = { value: Math.round(per[a.id].value), cost: Math.round(per[a.id].cost) });
+  ACCOUNTS.forEach(a => accounts[a.id] = { value: Math.round(per[a.id].value), cost: Math.round(per[a.id].cost), cash: Math.round(per[a.id].cash) });
   const m = curMonth();
   state.snapshots = state.snapshots || [];
   const i = state.snapshots.findIndex(x => x.month === m);
@@ -381,8 +464,9 @@ function addSnapshot() {
   state.snapshots = state.snapshots || [];
   let snap = state.snapshots.find(x => x.month === month);
   if (!snap) { snap = { month, accounts: {} }; state.snapshots.push(snap); }
-  snap.accounts[acct] = { value: Math.round(value), cost: Math.round(cost) };
-  document.getElementById('sValue').value = ''; document.getElementById('sCost').value = '';
+  const cash = parseFloat(document.getElementById('sCash').value) || 0;
+  snap.accounts[acct] = { value: Math.round(value), cost: Math.round(cost), cash: Math.round(cash) };
+  document.getElementById('sValue').value = ''; document.getElementById('sCost').value = ''; document.getElementById('sCash').value = '';
   persist(); render();
 }
 function delSnapshot(month) {
@@ -393,15 +477,23 @@ function setMFilter(f) { mFilter = f; renderMonthly(); }
 
 function monthlyRows() {
   const ids = mFilter === 'all' ? ACCOUNTS.map(a => a.id) : [mFilter];
+  const hasDep = id => state.flows.some(f => f.account === id && f.type === 'in');
   const snaps = (state.snapshots || []).slice().sort((a, b) => a.month.localeCompare(b.month));
   let prev = null;
   return snaps.map(sn => {
-    let value = 0, cost = 0;
-    ids.forEach(id => { const x = sn.accounts[id]; if (x) { value += x.value; cost += x.cost; } });
-    let realized = 0;
-    state.realized.forEach(r => { if (ids.includes(r.account) && r.date.slice(0, 7) <= sn.month) realized += toKRW(r.amount, r.account); });
-    const total = value - cost + realized;
-    const row = { month: sn.month, value, cost, total, ret: cost ? total / cost * 100 : 0, delta: prev === null ? null : total - prev };
+    let value = 0, base = 0, total = 0, wd = 0;
+    ids.forEach(id => {
+      const x = sn.accounts[id]; if (!x) return;
+      const cash = x.cash || 0, out = flowSum(id, 'out', sn.month), inn = flowSum(id, 'in', sn.month);
+      value += x.value + cash; wd += out;
+      if (hasDep(id)) { total += x.value + cash + out - inn; base += inn; }
+      else {
+        let realized = 0;
+        state.realized.forEach(r => { if (r.account === id && r.date.slice(0, 7) <= sn.month) realized += toKRW(r.amount, id); });
+        total += x.value - x.cost + realized; base += x.cost;
+      }
+    });
+    const row = { month: sn.month, value, wd, total, ret: base ? total / base * 100 : 0, delta: prev === null ? null : total - prev };
     prev = total;
     return row;
   });
@@ -426,8 +518,8 @@ function renderMonthly() {
                   y: { grid: { color: 'rgba(128,128,128,0.15)' }, ticks: { color: tc, font: { size: 11 }, callback: v => (v / 10000).toLocaleString('ko-KR') + '만' } } } }
     });
   }
-  document.getElementById('monthly').innerHTML = `<table><thead><tr><th>월</th><th>평가금액</th><th>투자원금</th><th>누적 총손익</th><th>누적 수익률</th><th>월간 손익</th><th></th></tr></thead><tbody>` +
-    rows.slice().reverse().map(r => `<tr><td>${r.month}</td><td>${fmtKRW(r.value)}</td><td>${fmtKRW(r.cost)}</td>
+  document.getElementById('monthly').innerHTML = `<table><thead><tr><th>월</th><th>평가금액(현금 포함)</th><th>누적 출금</th><th>누적 총손익</th><th>누적 수익률</th><th>월간 손익</th><th></th></tr></thead><tbody>` +
+    rows.slice().reverse().map(r => `<tr><td>${r.month}</td><td>${fmtKRW(r.value)}</td><td>${fmtKRW(r.wd)}</td>
       <td class="${cls(r.total)}">${signKRW(r.total)}</td><td class="${cls(r.ret)}">${fmtPct(r.ret)}</td>
       <td class="${cls(r.delta || 0)}">${r.delta === null ? '-' : signKRW(r.delta)}</td>
       <td>${r.month === curMonth() ? '<span class="tag">진행 중</span>' : `<button class="del" onclick="delSnapshot('${r.month}')" title="삭제">✕</button>`}</td></tr>`).join('') + '</tbody></table>';
