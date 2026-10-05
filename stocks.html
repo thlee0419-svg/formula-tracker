@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>📈 내 주식 계좌 대시보드</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="내 주식">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a18">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -125,7 +132,7 @@
   .hc-grid label { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; }
   @media (max-width: 760px) {
     body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-    .container { padding: 1rem .75rem 1.5rem; }
+    .container { padding: calc(1rem + env(safe-area-inset-top)) .75rem 1.5rem; }
     h1 { font-size: 19px; }
     .subtitle { font-size: 12px; margin-bottom: .75rem; }
     .gear { display: block; }
@@ -355,7 +362,9 @@ async function load() {
 }
 
 function saveUrl() {
-  const url = document.getElementById('urlInput').value.trim();
+  let url = document.getElementById('urlInput').value.trim();
+  const m = url.match(/#sync=(.+)$/);           // 연동 링크 전체를 붙여넣어도 됨
+  if (m) { try { url = decodeURIComponent(m[1]); } catch (e) {} }
   if (!url.startsWith('https://script.google.com')) { alert('올바른 URL이 아닙니다.'); return; }
   SCRIPT_URL = url; localStorage.setItem(LS_URL, url);
   document.getElementById('banner').classList.remove('visible');
@@ -798,6 +807,7 @@ function renderRealized() {
         <td><button class="del" onclick="delRealized('${r.id}')" title="삭제">✕</button></td></tr>`; }).join('') + '</tbody></table>';
 }
 
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 applySyncFromHash();
 showPage(localStorage.getItem(LS_PAGE) || 'home', false);
 load();

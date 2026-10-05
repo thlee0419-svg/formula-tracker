@@ -1,0 +1,16 @@
+{
+  "name": "내 주식 계좌 대시보드",
+  "short_name": "내 주식",
+  "description": "NH·삼성·미래에셋·신한 4개 계좌 성과 대시보드",
+  "start_url": "./stocks.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a18",
+  "theme_color": "#1a1a18",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
