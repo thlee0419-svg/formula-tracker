@@ -10,6 +10,7 @@
  * 4) 발급된 웹 앱 URL(…/exec)을 stocks.html 상단 입력란에 붙여넣습니다.
  *
  * 전체 상태(JSON)를 'data' 시트의 A열에 40,000자씩 나눠 저장합니다.
+ * 현재가는 'quotes' 시트에서 GOOGLEFINANCE 함수로 조회합니다. (코드를 바꾼 뒤에는 새 버전으로 다시 배포해야 합니다)
  */
 const SHEET = 'data';
 const CHUNK = 40000;
@@ -20,10 +21,45 @@ function getSheet_() {
 }
 
 function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action === 'quotes') return json_(getQuotes_((p.t || '').split(',').filter(Boolean), p.rate === '1'));
   const rows = getSheet_().getRange(1, 1, Math.max(getSheet_().getLastRow(), 1), 1).getValues();
-  const json = rows.map(r => r[0]).join('');
-  const state = json ? JSON.parse(json) : null;
-  return ContentService.createTextOutput(JSON.stringify({ state })).setMimeType(ContentService.MimeType.JSON);
+  const text = rows.map(r => r[0]).join('');
+  const state = text ? JSON.parse(text) : null;
+  return json_({ state });
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * 현재가 조회: 'quotes' 시트에 GOOGLEFINANCE 수식을 넣고 계산 결과를 읽어 온다.
+ * 구글 파이낸스 시세는 약 15~20분 지연될 수 있다.
+ * 티커 예) 한국: KRX:005930 / 미국: NVDA 또는 NASDAQ:NVDA
+ */
+function getQuotes_(symbols, withRate) {
+  const SAFE = /^[A-Za-z0-9.:_-]{1,24}$/;               // 수식 주입 방지: 안전한 문자만 허용
+  const list = symbols.filter(t => SAFE.test(t)).slice(0, 60);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('quotes') || ss.insertSheet('quotes');
+  sh.clear();
+  const rows = list.length + (withRate ? 1 : 0);
+  if (!rows) return { quotes: {}, rate: null };
+  sh.getRange(1, 1, rows, 1).setNumberFormat('@').setValues(list.map(t => [t]).concat(withRate ? [['USDKRW']] : []));
+  sh.getRange(1, 2, rows, 1).setFormulas(
+    list.map((t, i) => ['=GOOGLEFINANCE(A' + (i + 1) + ',"price")']).concat(withRate ? [['=GOOGLEFINANCE("CURRENCY:USDKRW")']] : []));
+  let values = [];
+  for (let tries = 0; tries < 8; tries++) {              // 계산이 끝날 때까지 잠깐씩 기다림
+    SpreadsheetApp.flush();
+    values = sh.getRange(1, 2, rows, 1).getValues().map(r => r[0]);
+    if (!values.some(v => v === 'Loading...' || v === '')) break;
+    Utilities.sleep(700);
+  }
+  const num = v => (typeof v === 'number' && isFinite(v) && v > 0) ? v : null;
+  const quotes = {};
+  list.forEach((t, i) => quotes[t] = num(values[i]));
+  return { quotes, rate: withRate ? num(values[list.length]) : null };
 }
 
 function doPost(e) {

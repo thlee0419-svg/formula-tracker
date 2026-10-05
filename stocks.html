@@ -103,6 +103,9 @@
   .page-nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; background: var(--bg); padding: 8px 0; margin-bottom: 1rem; overflow-x: auto; border-bottom: 0.5px solid var(--border); }
   .page-nav button { flex: 1 1 0; min-width: 0; font-size: 13px; font-weight: 500; padding: 9px 2px; border: 0.5px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
   .page-nav button.active { background: var(--text); color: var(--surface); border-color: var(--text); }
+  .quote-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); margin-bottom: .75rem; }
+  .quote-bar.error #quoteStatus { color: var(--up); }
+  .tag.edit { cursor: pointer; }
   .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
@@ -188,6 +191,11 @@
     </div>
   </div>
 
+  <div class="quote-bar">
+    <span id="quoteStatus">시세: 시트 연동 후 앱을 열 때 자동 갱신돼요</span>
+    <button class="btn ghost" id="quoteBtn" onclick="refreshQuotes(false)">🔄 시세 새로고침</button>
+  </div>
+
   <div class="page-nav" id="pageNav">
     <button data-page="home" onclick="showPage('home')"><span class="ic">📊</span><span>요약</span></button>
     <button data-page="holdings" onclick="showPage('holdings')"><span class="ic">💼</span><span>보유 종목</span></button>
@@ -220,7 +228,7 @@
     <div class="form-grid">
       <div class="field"><label>계좌</label><select id="fAcct"></select></div>
       <div class="field"><label>종목명</label><input id="fName" placeholder="예: 삼성전자"></div>
-      <div class="field"><label>티커(선택)</label><input id="fTicker" placeholder="005930"></div>
+      <div class="field"><label>티커 (시세 자동)</label><input id="fTicker" placeholder="005930 / NVDA"></div>
       <div class="field"><label>섹터</label><input id="fSector" list="sectorList" placeholder="예: 반도체"></div>
       <div class="field"><label>수량</label><input type="number" id="fQty" min="0" step="any"></div>
       <div class="field"><label>평균 매수가</label><input type="number" id="fAvg" min="0" step="any"></div>
@@ -351,14 +359,68 @@ async function load() {
   render();
   if (!SCRIPT_URL) { document.getElementById('banner').classList.add('visible'); return; }
   setSync('불러오는 중...');
+  let sheetOk = false;
   try {
     const res = await fetch(`${SCRIPT_URL}?action=load`);
     const data = await res.json();
     if (data && data.state) { state = { ...state, ...data.state }; localStorage.setItem(LS_KEY, JSON.stringify(state)); setSync(''); normalize(); }
     else if (state.holdings.length || state.realized.length || state.flows.length) persist(); // 시트가 비어 있으면 이 브라우저의 데이터를 올림
     else setSync('');
+    sheetOk = true;
   } catch (e) { setSync('시트 불러오기 실패. 이 브라우저의 저장본을 표시합니다.', true); }
   render();
+  if (sheetOk) refreshQuotes(true);   // 앱을 열 때 현재가 자동 갱신
+}
+
+/* ---------- 현재가 자동 갱신 (구글 파이낸스, 약 15~20분 지연) ---------- */
+const LS_QUOTE = 'stockDashboardQuoteAt';
+function quoteSymbol(h) {
+  const t = (h.ticker || '').trim();
+  if (!t || !ACCT[h.account]) return '';
+  if (t.includes(':')) return t;                                // 이미 거래소를 붙여 쓴 경우
+  return ACCT[h.account].cur === 'KRW' ? 'KRX:' + t : t;        // 국내 계좌는 KRX: 자동 부착
+}
+function setQuoteStatus(msg, isError, keep) {
+  if (keep) { try { localStorage.setItem('stockDashboardQuoteMsg', JSON.stringify({ msg, isError: !!isError })); } catch (e) {} }
+  document.getElementById('quoteStatus').textContent = msg;
+  document.querySelector('.quote-bar').classList.toggle('error', !!isError);
+}
+function editTicker(id) {
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  const v = prompt(`${h.name} 티커 (예: 005930, NVDA, NASDAQ:NVDA)\n비우면 현재가를 직접 입력하는 종목이 돼요.`, h.ticker || '');
+  if (v === null) return;
+  h.ticker = v.trim(); persist(); render();
+}
+async function refreshQuotes(auto) {
+  if (!SCRIPT_URL) { if (!auto) alert('먼저 구글 시트 연동을 설정해 주세요.'); return; }
+  if (auto && Date.now() - Number(localStorage.getItem(LS_QUOTE) || 0) < 3 * 60 * 1000) {   // 너무 자주 조회하지 않음
+    try { const m = JSON.parse(localStorage.getItem('stockDashboardQuoteMsg')); if (m) setQuoteStatus(m.msg, m.isError); } catch (e) {}
+    return;
+  }
+  const targets = state.holdings.map(h => ({ h, sym: quoteSymbol(h) })).filter(x => x.sym);
+  const symbols = [...new Set(targets.map(x => x.sym))];
+  const btn = document.getElementById('quoteBtn'); btn.disabled = true;
+  setQuoteStatus('시세 불러오는 중...');
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=quotes&rate=1&t=${encodeURIComponent(symbols.join(','))}`);
+    const data = await res.json();
+    if (!data || !data.quotes) throw new Error('bad response');
+    let ok = 0; const failed = [];
+    targets.forEach(({ h, sym }) => {
+      const price = Number(data.quotes[sym]);
+      if (price > 0) { h.cur = price; ok++; } else failed.push(h.name);
+    });
+    let rateNote = '';
+    if (Number(data.rate) > 0) { state.rate = Math.round(Number(data.rate) * 100) / 100; rateNote = ` · 환율 ${state.rate.toLocaleString('ko-KR')}`; }
+    localStorage.setItem(LS_QUOTE, String(Date.now()));
+    if (ok || rateNote) { persist(); render(); }
+    const t = new Date().toTimeString().slice(0, 5);
+    const manual = state.holdings.length - targets.length;
+    setQuoteStatus(`시세 ${t} 갱신 (지연 시세) · ${ok}개 반영${rateNote}` + (failed.length ? ` · 조회 실패: ${failed.join(', ')}` : '') + (manual ? ` · 티커 없음 ${manual}개는 수동` : ''), failed.length > 0, true);
+  } catch (e) {
+    setQuoteStatus('시세 조회 실패. Apps Script를 새 버전으로 다시 배포했는지 확인해 주세요.', true);
+  }
+  btn.disabled = false;
 }
 
 function saveUrl() {
@@ -699,7 +761,7 @@ function renderHoldings() {
   document.getElementById('holdings').innerHTML = `<table class="hold"><thead><tr><th>계좌</th><th>종목</th><th>섹터</th><th>수량</th><th>평균매수가</th><th>현재가</th><th>평가금액</th><th>전체 비중</th><th>평가손익</th><th>수익률</th><th></th></tr></thead><tbody>` +
     items.map(({ h, a, val, pnl, ret, valKRW }) => `<tr>
       <td><span class="dot" style="--c:${a.color}"></span>${a.name}</td>
-      <td>${esc(h.name)}${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}</td>
+      <td>${esc(h.name)}<span class="tag edit" onclick="editTicker('${h.id}')" title="티커 수정">${h.ticker ? esc(h.ticker) : '+ 티커'}</span></td>
       <td><input class="sec" list="sectorList" value="${esc(h.sector || '')}" placeholder="미분류" onchange="updateSector('${h.id}', this.value)" aria-label="${esc(h.name)} 섹터"></td>
       <td>${h.qty.toLocaleString('ko-KR', {maximumFractionDigits:4})}</td>
       <td>${fmtNum(h.avg, a.cur)}</td>
@@ -710,7 +772,7 @@ function renderHoldings() {
       <td class="${cls(ret)}">${fmtPct(ret)}</td>
       <td><button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>' +
     '<div class="hcards">' + items.map(({ h, a, val, pnl, ret, valKRW }) => `<div class="hcard">
-      <div class="hc-top"><div><span class="dot" style="--c:${a.color}"></span><b>${esc(h.name)}</b>${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}
+      <div class="hc-top"><div><span class="dot" style="--c:${a.color}"></span><b>${esc(h.name)}</b><span class="tag edit" onclick="editTicker('${h.id}')">${h.ticker ? esc(h.ticker) : '+ 티커'}</span>
         <div class="hc-sub">${a.name} · 전체의 ${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</div></div>
         <button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></div>
       <div class="hc-mid"><div><span>평가금액</span><b>${fmtNum(val, a.cur)}</b></div>
