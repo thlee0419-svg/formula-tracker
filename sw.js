@@ -20,7 +20,7 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })));
     return;
   }
-  e.respondWith(fetch(req).then(res => {           // 화면 파일: 네트워크 우선(업데이트 즉시 반영), 오프라인이면 캐시
+  e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => {  // 화면 파일: 네트워크 우선(브라우저 임시 캐시도 건너뜀), 오프라인이면 캐시
     const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res;
   }).catch(() => caches.match(req, { ignoreSearch: true })));
 });
