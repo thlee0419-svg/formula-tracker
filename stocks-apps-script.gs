@@ -10,7 +10,7 @@
  * 4) 발급된 웹 앱 URL(…/exec)을 stocks.html 상단 입력란에 붙여넣습니다.
  *
  * 전체 상태(JSON)를 'data' 시트의 A열에 40,000자씩 나눠 저장합니다.
- * 현재가는 'quotes' 시트에서 GOOGLEFINANCE 함수로 조회합니다. (코드를 바꾼 뒤에는 새 버전으로 다시 배포해야 합니다)
+ * 현재가는 'quotes' 시트에서 GOOGLEFINANCE 함수로 조회하고, 구글에서 못 받은 종목(코스닥 등)은 야후 파이낸스로 보충합니다. (코드를 바꾼 뒤에는 새 버전으로 다시 배포해야 합니다)
  */
 const SHEET = 'data';
 const CHUNK = 40000;
@@ -59,7 +59,35 @@ function getQuotes_(symbols, withRate) {
   const num = v => (typeof v === 'number' && isFinite(v) && v > 0) ? v : null;
   const quotes = {};
   list.forEach((t, i) => quotes[t] = num(values[i]));
+  fillFromYahoo_(quotes);                                // 구글에서 못 받은 종목(코스닥 등)은 야후로 보충
   return { quotes, rate: withRate ? num(values[list.length]) : null };
+}
+
+/** 구글 파이낸스에서 값이 없는 종목만 야후 파이낸스(비공식)로 조회한다. */
+function yahooSymbol_(sym) {
+  if (sym.indexOf('KRX:') === 0) return sym.slice(4) + '.KS';        // 코스피
+  if (sym.indexOf('KOSDAQ:') === 0) return sym.slice(7) + '.KQ';     // 코스닥
+  const t = sym.indexOf(':') >= 0 ? sym.split(':')[1] : sym;         // NASDAQ:NVDA -> NVDA
+  return t.replace(/\./g, '-');                                      // BRK.B -> BRK-B
+}
+function fillFromYahoo_(quotes) {
+  const missing = Object.keys(quotes).filter(t => quotes[t] === null);
+  if (!missing.length) return;
+  const reqs = missing.map(t => ({
+    url: 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(yahooSymbol_(t)) + '?interval=1d&range=1d',
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    muteHttpExceptions: true,
+  }));
+  let resps = [];
+  try { resps = UrlFetchApp.fetchAll(reqs); } catch (err) { return; }   // 야후가 막혀도 나머지 결과는 그대로 돌려줌
+  resps.forEach((r, i) => {
+    try {
+      if (r.getResponseCode() !== 200) return;
+      const meta = JSON.parse(r.getContentText()).chart.result[0].meta;
+      const price = meta.regularMarketPrice;
+      if (typeof price === 'number' && isFinite(price) && price > 0) quotes[missing[i]] = price;
+    } catch (err) {}
+  });
 }
 
 function doPost(e) {
