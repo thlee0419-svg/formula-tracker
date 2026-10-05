@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>📈 내 주식 계좌 대시보드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -109,11 +109,53 @@
     .form-grid, .form-grid[style] { grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; }
     .form-grid .btn { grid-column: 1 / -1; }
   }
+
+  /* ---------- 휴대폰 최적화 ---------- */
+  .top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .gear { display: none; background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; font-size: 18px; width: 40px; height: 40px; cursor: pointer; flex-shrink: 0; }
+  .page-nav .ic { margin-right: 4px; }
+  .hcards { display: none; }
+  .hcard { border: 0.5px solid var(--border); border-radius: 10px; padding: .8rem .9rem; margin-bottom: 8px; background: var(--surface); }
+  .hc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .hc-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .hc-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 6px; font-variant-numeric: tabular-nums; }
+  .hc-mid span { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+  .hc-mid b { font-size: 14px; }
+  .hc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .hc-grid label { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; }
+  @media (max-width: 760px) {
+    body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+    .container { padding: 1rem .75rem 1.5rem; }
+    h1 { font-size: 19px; }
+    .subtitle { font-size: 12px; margin-bottom: .75rem; }
+    .gear { display: block; }
+    .toolbar { display: none; margin-bottom: .75rem; }
+    .toolbar.open { display: flex; }
+    .page-nav { position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 20; margin: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); gap: 4px; border-bottom: none; border-top: 0.5px solid var(--border); background: var(--surface); overflow: visible; }
+    .page-nav button { display: flex; flex-direction: column; align-items: center; gap: 2px; border: none; background: none; font-size: 11px; padding: 6px 0; border-radius: 10px; color: var(--text-muted); }
+    .page-nav button .ic { margin: 0; font-size: 20px; line-height: 1; }
+    .page-nav button.active { background: var(--surface-muted); color: var(--text); }
+    .card { padding: 1rem; border-radius: 12px; }
+    .summary { grid-template-columns: 1fr 1fr !important; gap: 8px; }
+    .stat.s1 { grid-column: 1 / -1; order: 0; }
+    .stat.s2 { order: 1; } .stat.s3 { order: 2; }
+    .stat-value { font-size: 18px; }
+    .stat.s1 .stat-value { font-size: 24px; }
+    .accounts { gap: 8px; }
+    .chart-wrap { height: 210px; }
+    .table-scroll table.hold { display: none; }
+    .hcards { display: block; }
+    .hm { display: none; }
+    input, select { font-size: 16px; min-height: 42px; }
+    .btn { min-height: 42px; }
+    .tab { padding: 9px 11px; }
+    .del { padding: 8px 10px; font-size: 16px; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>📈 내 주식 계좌 대시보드</h1>
+  <div class="top-row"><h1>📈 내 주식 계좌 대시보드</h1><button class="gear" onclick="document.getElementById('toolbar').classList.toggle('open')" aria-label="설정">⚙️</button></div>
   <p class="subtitle">NH · 삼성 · 미래에셋 · 신한 4개 계좌의 성과를 한눈에 확인하세요</p>
 
   <div class="banner" id="banner">
@@ -124,7 +166,7 @@
     </div>
   </div>
 
-  <div class="toolbar">
+  <div class="toolbar" id="toolbar">
     <div class="group">
       <label for="rate">USD/KRW 환율</label>
       <input type="number" id="rate" min="0" step="0.1" onchange="setRate(this.value)">
@@ -140,10 +182,10 @@
   </div>
 
   <div class="page-nav" id="pageNav">
-    <button data-page="home" onclick="showPage('home')">📊 요약</button>
-    <button data-page="holdings" onclick="showPage('holdings')">💼 보유 종목</button>
-    <button data-page="monthly" onclick="showPage('monthly')">📅 월별 성과</button>
-    <button data-page="money" onclick="showPage('money')">💰 입출금</button>
+    <button data-page="home" onclick="showPage('home')"><span class="ic">📊</span><span>요약</span></button>
+    <button data-page="holdings" onclick="showPage('holdings')"><span class="ic">💼</span><span>보유 종목</span></button>
+    <button data-page="monthly" onclick="showPage('monthly')"><span class="ic">📅</span><span>월별 성과</span></button>
+    <button data-page="money" onclick="showPage('money')"><span class="ic">💰</span><span>입출금</span></button>
   </div>
 
   <section class="page" data-page="home">
@@ -455,11 +497,11 @@ function render() {
   ['rDate','cDate'].forEach(i => { const e = document.getElementById(i); if (!e.value) e.value = today; });
 
   document.getElementById('summary').innerHTML = `
-    <div class="stat"><div class="stat-label">총 평가금액</div><div class="stat-value">${fmtKRW(total.value)}</div><div class="stat-sub" style="color:var(--text-muted)">투자원금 ${fmtKRW(total.cost)}${total.cash ? ` · 현금 ${fmtKRW(total.cash)}` : ''}</div></div>
-    <div class="stat"><div class="stat-label">평가손익</div><div class="stat-value ${cls(total.unreal)}">${signKRW(total.unreal)}</div><div class="stat-sub ${cls(total.unreal)}">${fmtPct(total.ret)}</div></div>
-    <div class="stat"><div class="stat-label">실현손익</div><div class="stat-value ${cls(total.realized)}">${signKRW(total.realized)}</div></div>
-    <div class="stat"><div class="stat-label">누적 출금 (회수)</div><div class="stat-value">${fmtKRW(total.wd)}</div><div class="stat-sub" style="color:var(--text-muted)">누적 입금 ${fmtKRW(total.dep)}</div></div>
-    <div class="stat"><div class="stat-label">총손익</div><div class="stat-value ${cls(total.perf)}">${signKRW(total.perf)}</div><div class="stat-sub ${cls(total.perf)}">${fmtPct(total.perfRet)}</div></div>`;
+    <div class="stat s1"><div class="stat-label">총 평가금액</div><div class="stat-value">${fmtKRW(total.value)}</div><div class="stat-sub" style="color:var(--text-muted)">투자원금 ${fmtKRW(total.cost)}${total.cash ? ` · 현금 ${fmtKRW(total.cash)}` : ''}</div></div>
+    <div class="stat s3"><div class="stat-label">평가손익</div><div class="stat-value ${cls(total.unreal)}">${signKRW(total.unreal)}</div><div class="stat-sub ${cls(total.unreal)}">${fmtPct(total.ret)}</div></div>
+    <div class="stat s3"><div class="stat-label">실현손익</div><div class="stat-value ${cls(total.realized)}">${signKRW(total.realized)}</div></div>
+    <div class="stat s3"><div class="stat-label">누적 출금 (회수)</div><div class="stat-value">${fmtKRW(total.wd)}</div><div class="stat-sub" style="color:var(--text-muted)">누적 입금 ${fmtKRW(total.dep)}</div></div>
+    <div class="stat s2"><div class="stat-label">총손익</div><div class="stat-value ${cls(total.perf)}">${signKRW(total.perf)}</div><div class="stat-sub ${cls(total.perf)}">${fmtPct(total.perfRet)}</div></div>`;
 
   document.getElementById('accounts').innerHTML = ACCOUNTS.map(a => {
     const p = per[a.id];
@@ -603,8 +645,8 @@ function renderMonthly() {
                   y: { grid: { color: 'rgba(128,128,128,0.15)' }, ticks: { color: tc, font: { size: 11 }, callback: v => (v / 10000).toLocaleString('ko-KR') + '만' } } } }
     });
   }
-  document.getElementById('monthly').innerHTML = `<table><thead><tr><th>월</th><th>평가금액(현금 포함)</th><th>누적 출금</th><th>누적 총손익</th><th>누적 수익률</th><th>월간 손익</th><th></th></tr></thead><tbody>` +
-    rows.slice().reverse().map(r => `<tr><td>${r.month}</td><td>${fmtKRW(r.value)}</td><td>${fmtKRW(r.wd)}</td>
+  document.getElementById('monthly').innerHTML = `<table><thead><tr><th>월</th><th class="hm">평가금액(현금 포함)</th><th class="hm">누적 출금</th><th>누적 총손익</th><th>누적 수익률</th><th>월간 손익</th><th></th></tr></thead><tbody>` +
+    rows.slice().reverse().map(r => `<tr><td>${r.month}</td><td class="hm">${fmtKRW(r.value)}</td><td class="hm">${fmtKRW(r.wd)}</td>
       <td class="${cls(r.total)}">${signKRW(r.total)}</td><td class="${cls(r.ret)}">${fmtPct(r.ret)}</td>
       <td class="${cls(r.delta || 0)}">${r.delta === null ? '-' : signKRW(r.delta)}</td>
       <td>${r.month === curMonth() ? '<span class="tag">진행 중</span>' : `<button class="del" onclick="delSnapshot('${r.month}')" title="삭제">✕</button>`}</td></tr>`).join('') + '</tbody></table>';
@@ -657,7 +699,18 @@ function renderHoldings() {
       <td>${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</td>
       <td class="${cls(pnl)}">${(pnl > 0 ? '+' : '') + fmtNum(pnl, a.cur)}</td>
       <td class="${cls(ret)}">${fmtPct(ret)}</td>
-      <td><button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>';
+      <td><button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>' +
+    '<div class="hcards">' + items.map(({ h, a, val, pnl, ret, valKRW }) => `<div class="hcard">
+      <div class="hc-top"><div><span class="dot" style="--c:${a.color}"></span><b>${esc(h.name)}</b>${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}
+        <div class="hc-sub">${a.name} · 전체의 ${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</div></div>
+        <button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></div>
+      <div class="hc-mid"><div><span>평가금액</span><b>${fmtNum(val, a.cur)}</b></div>
+        <div><span>평가손익</span><b class="${cls(pnl)}">${(pnl > 0 ? '+' : '') + fmtNum(pnl, a.cur)} (${fmtPct(ret)})</b></div></div>
+      <div class="hc-sub">${h.qty.toLocaleString('ko-KR', {maximumFractionDigits:4})}주 · 평균 ${fmtNum(h.avg, a.cur)}</div>
+      <div class="hc-grid">
+        <label>섹터<input list="sectorList" value="${esc(h.sector || '')}" placeholder="미분류" onchange="updateSector('${h.id}', this.value)"></label>
+        <label>현재가<input type="number" step="any" inputmode="decimal" value="${h.cur}" onchange="updateCur('${h.id}', this.value)"></label>
+      </div></div>`).join('') + '</div>';
 }
 
 /* ---------- 섹터 목록 관리 ---------- */
