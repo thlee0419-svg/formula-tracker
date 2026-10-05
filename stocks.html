@@ -374,11 +374,11 @@ async function load() {
 
 /* ---------- 현재가 자동 갱신 (구글 파이낸스, 약 15~20분 지연) ---------- */
 const LS_QUOTE = 'stockDashboardQuoteAt';
-function quoteSymbol(h) {
+function quoteSymbols(h) {                                      // 조회 후보 목록 (앞에서부터 시도)
   const t = (h.ticker || '').trim();
-  if (!t || !ACCT[h.account]) return '';
-  if (t.includes(':')) return t;                                // 이미 거래소를 붙여 쓴 경우
-  return ACCT[h.account].cur === 'KRW' ? 'KRX:' + t : t;        // 국내 계좌는 KRX: 자동 부착
+  if (!t || !ACCT[h.account]) return [];
+  if (t.includes(':')) return [t];                              // 거래소를 직접 붙여 쓴 경우
+  return ACCT[h.account].cur === 'KRW' ? ['KRX:' + t, 'KOSDAQ:' + t] : [t];   // 국내: 코스피 → 코스닥 순
 }
 function setQuoteStatus(msg, isError, keep) {
   if (keep) { try { localStorage.setItem('stockDashboardQuoteMsg', JSON.stringify({ msg, isError: !!isError })); } catch (e) {} }
@@ -397,8 +397,8 @@ async function refreshQuotes(auto) {
     try { const m = JSON.parse(localStorage.getItem('stockDashboardQuoteMsg')); if (m) setQuoteStatus(m.msg, m.isError); } catch (e) {}
     return;
   }
-  const targets = state.holdings.map(h => ({ h, sym: quoteSymbol(h) })).filter(x => x.sym);
-  const symbols = [...new Set(targets.map(x => x.sym))];
+  const targets = state.holdings.map(h => ({ h, syms: quoteSymbols(h) })).filter(x => x.syms.length);
+  const symbols = [...new Set(targets.flatMap(x => x.syms))];
   const btn = document.getElementById('quoteBtn'); btn.disabled = true;
   setQuoteStatus('시세 불러오는 중...');
   try {
@@ -406,9 +406,9 @@ async function refreshQuotes(auto) {
     const data = await res.json();
     if (!data || !data.quotes) throw new Error('bad response');
     let ok = 0; const failed = [];
-    targets.forEach(({ h, sym }) => {
-      const price = Number(data.quotes[sym]);
-      if (price > 0) { h.cur = price; ok++; } else failed.push(h.name);
+    targets.forEach(({ h, syms }) => {
+      const hit = syms.map(sym => Number(data.quotes[sym])).find(v => v > 0);
+      if (hit) { h.cur = hit; ok++; } else failed.push(h.name);
     });
     let rateNote = '';
     if (Number(data.rate) > 0) { state.rate = Math.round(Number(data.rate) * 100) / 100; rateNote = ` · 환율 ${state.rate.toLocaleString('ko-KR')}`; }
