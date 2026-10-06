@@ -722,7 +722,8 @@ function trendSeries() {
     ? (state.daily || []).map(x => ({ label: x.date, accounts: x.accounts }))
     : (state.snapshots || []).map(x => ({ label: x.month, accounts: x.accounts }));
   src.sort((a, b) => a.label.localeCompare(b.label));
-  let rows = src.map(x => ({ label: x.label, total: ids.reduce((sum, id) => { const a = x.accounts[id]; return a ? sum + a.value + (a.cash || 0) : sum; }, 0) }));
+  const accTotal = (x, id) => { const a = x.accounts[id]; return a ? a.value + (a.cash || 0) : 0; };
+  let rows = src.map(x => ({ label: x.label, by: Object.fromEntries(ACCOUNTS.map(a => [a.id, accTotal(x, a.id)])), total: ids.reduce((sum, id) => sum + accTotal(x, id), 0) }));
   rows.forEach((r, i) => { r.delta = i ? r.total - rows[i - 1].total : null; r.pct = i && rows[i - 1].total ? r.delta / rows[i - 1].total * 100 : null; });
   if (tView === 'daily' && tRange > 0 && rows.length) {      // 최근 N일만
     const cut = new Date(Date.now() - tRange * 86400000).toISOString().slice(0, 10);
@@ -751,24 +752,34 @@ function renderTrend() {
     stat('현재 총자산', fmtKRW(last.total), last.label) +
     stat(`${unit} 대비`, last.delta === null ? '-' : signKRW(last.delta), last.pct === null ? '' : fmtPct(last.pct), last.delta === null ? '' : cls(last.delta)) +
     stat('기간 증감', rows.length > 1 ? signKRW(span) : '-', rows.length > 1 ? fmtPct(spanPct) : '', rows.length > 1 ? cls(span) : '');
+  const stacked = tAcct === 'all';
+  const shown = ACCOUNTS.filter(a => rows.some(r => r.by[a.id] > 0));          // 값이 있었던 계좌만 표시
   if (typeof Chart !== 'undefined') {
     const tc = cssVar('--text-muted'), accent = cssVar('--accent');
+    const labels = rows.map(r => tView === 'daily' ? r.label.slice(5).replace('-', '/') : r.label);
+    const pr = rows.length > 40 ? 0 : 3;
+    const datasets = stacked
+      ? shown.map(a => ({ label: a.name, data: rows.map(r => Math.round(r.by[a.id])), borderColor: a.color, backgroundColor: a.color + '66', fill: true, stack: 's', borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.2 }))
+      : [{ label: '총자산', data: rows.map(r => Math.round(r.total)), borderColor: accent, backgroundColor: accent + '22', fill: true, borderWidth: 2, pointRadius: pr, pointHoverRadius: 5, tension: 0.2 }];
     tChart = new Chart(document.getElementById('trendChart'), {
       type: 'line',
-      data: { labels: rows.map(r => tView === 'daily' ? r.label.slice(5).replace('-', '/') : r.label),
-        datasets: [{ label: '총자산', data: rows.map(r => Math.round(r.total)), borderColor: accent, backgroundColor: accent + '22', fill: true, borderWidth: 2, pointRadius: rows.length > 40 ? 0 : 3, pointHoverRadius: 5, tension: 0.2 }] },
+      data: { labels, datasets },
       options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { display: false }, tooltip: { callbacks: {
+        plugins: { legend: { display: stacked, position: 'bottom', labels: { color: tc, boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: {
           title: items => rows[items[0].dataIndex].label,
-          label: c => ` 총자산: ${fmtKRW(c.raw)}`,
-          afterLabel: c => { const r = rows[c.dataIndex]; return r.delta === null ? '' : ` ${unit} 대비: ${signKRW(r.delta)} (${fmtPct(r.pct)})`; } } } },
+          label: c => ` ${c.dataset.label}: ${fmtKRW(c.raw)}`,
+          footer: items => { const r = rows[items[0].dataIndex]; return `합계: ${fmtKRW(r.total)}` + (r.delta === null ? '' : `\n${unit} 대비: ${signKRW(r.delta)} (${fmtPct(r.pct)})`); } } } },
         scales: { x: { grid: { display: false }, ticks: { color: tc, font: { size: 11 }, maxTicksLimit: 8, autoSkip: true } },
-                  y: { grid: { color: 'rgba(128,128,128,0.15)' }, ticks: { color: tc, font: { size: 11 }, callback: v => (v / 10000).toLocaleString('ko-KR') + '만' } } } }
+                  y: { stacked, beginAtZero: stacked, grid: { color: 'rgba(128,128,128,0.15)' }, ticks: { color: tc, font: { size: 11 }, callback: v => (v / 10000).toLocaleString('ko-KR') + '만' } } } }
     });
   }
-  document.getElementById('trendTable').innerHTML = `<table><thead><tr><th>${tView === 'daily' ? '날짜' : '월'}</th><th>총자산</th><th>${unit} 대비</th><th>증감률</th></tr></thead><tbody>` +
-    rows.slice().reverse().slice(0, 200).map(r => `<tr><td>${r.label}</td><td>${fmtKRW(r.total)}</td>
-      <td class="${cls(r.delta || 0)}">${r.delta === null ? '-' : signKRW(r.delta)}</td><td class="${cls(r.pct || 0)}">${r.pct === null ? '-' : fmtPct(r.pct)}</td></tr>`).join('') + '</tbody></table>';
+  const accCols = stacked ? shown : [];
+  document.getElementById('trendTable').innerHTML = `<table><thead><tr><th>${tView === 'daily' ? '날짜' : '월'}</th><th>총자산</th>` +
+    accCols.map(a => `<th><span class="dot" style="--c:${a.color}"></span>${a.name.replace('증권', '')}</th>`).join('') +
+    `<th>${unit} 대비</th><th>증감률</th></tr></thead><tbody>` +
+    rows.slice().reverse().slice(0, 200).map(r => `<tr><td>${r.label}</td><td><b>${fmtKRW(r.total)}</b></td>` +
+      accCols.map(a => `<td>${fmtKRW(r.by[a.id])}</td>`).join('') +
+      `<td class="${cls(r.delta || 0)}">${r.delta === null ? '-' : signKRW(r.delta)}</td><td class="${cls(r.pct || 0)}">${r.pct === null ? '-' : fmtPct(r.pct)}</td></tr>`).join('') + '</tbody></table>';
 }
 
 function setMFilter(f) { mFilter = f; renderMonthly(); }
