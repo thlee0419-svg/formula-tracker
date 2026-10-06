@@ -494,6 +494,18 @@ function updateSector(id, v) {
   const h = state.holdings.find(x => x.id === id);
   if (h) { h.sector = v.trim(); ensureSector(h.sector); persist(); render(); }
 }
+function updateQty(id, v) {
+  const h = state.holdings.find(x => x.id === id); const n = parseFloat(v);
+  if (!h) return;
+  if (!(n > 0)) { alert('수량은 0보다 커야 해요. 전량 매도했다면 오른쪽 ✕로 종목을 지워 주세요.'); render(); return; }
+  h.qty = n; persist(); render();
+}
+function updateAvg(id, v) {
+  const h = state.holdings.find(x => x.id === id); const n = parseFloat(v);
+  if (!h) return;
+  if (!(n >= 0)) { alert('평균 매수가를 숫자로 입력해 주세요.'); render(); return; }
+  h.avg = n; persist(); render();
+}
 function updateCur(id, v) {
   const h = state.holdings.find(x => x.id === id); const n = parseFloat(v);
   if (h && n >= 0) { h.cur = n; persist(); render(); }
@@ -763,8 +775,8 @@ function renderHoldings() {
       <td><span class="dot" style="--c:${a.color}"></span>${a.name}</td>
       <td>${esc(h.name)}<span class="tag edit" onclick="editTicker('${h.id}')" title="티커 수정">${h.ticker ? esc(h.ticker) : '+ 티커'}</span></td>
       <td><input class="sec" list="sectorList" value="${esc(h.sector || '')}" placeholder="미분류" onchange="updateSector('${h.id}', this.value)" aria-label="${esc(h.name)} 섹터"></td>
-      <td>${h.qty.toLocaleString('ko-KR', {maximumFractionDigits:4})}</td>
-      <td>${fmtNum(h.avg, a.cur)}</td>
+      <td><input class="cur" type="number" step="any" min="0" value="${h.qty}" onchange="updateQty('${h.id}', this.value)" aria-label="${esc(h.name)} 수량"></td>
+      <td><input class="cur" type="number" step="any" min="0" value="${h.avg}" onchange="updateAvg('${h.id}', this.value)" aria-label="${esc(h.name)} 평균 매수가"></td>
       <td><input class="cur" type="number" step="any" value="${h.cur}" onchange="updateCur('${h.id}', this.value)" aria-label="${esc(h.name)} 현재가"></td>
       <td>${fmtNum(val, a.cur)}</td>
       <td>${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</td>
@@ -777,8 +789,9 @@ function renderHoldings() {
         <button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></div>
       <div class="hc-mid"><div><span>평가금액</span><b>${fmtNum(val, a.cur)}</b></div>
         <div><span>평가손익</span><b class="${cls(pnl)}">${(pnl > 0 ? '+' : '') + fmtNum(pnl, a.cur)} (${fmtPct(ret)})</b></div></div>
-      <div class="hc-sub">${h.qty.toLocaleString('ko-KR', {maximumFractionDigits:4})}주 · 평균 ${fmtNum(h.avg, a.cur)}</div>
       <div class="hc-grid">
+        <label>수량<input type="number" step="any" min="0" inputmode="decimal" value="${h.qty}" onchange="updateQty('${h.id}', this.value)"></label>
+        <label>평균 매수가${a.cur === 'USD' ? ' ($)' : ''}<input type="number" step="any" min="0" inputmode="decimal" value="${h.avg}" onchange="updateAvg('${h.id}', this.value)"></label>
         <label>섹터<input list="sectorList" value="${esc(h.sector || '')}" placeholder="미분류" onchange="updateSector('${h.id}', this.value)"></label>
         <label>현재가<input type="number" step="any" inputmode="decimal" value="${h.cur}" onchange="updateCur('${h.id}', this.value)"></label>
       </div></div>`).join('') + '</div>';
