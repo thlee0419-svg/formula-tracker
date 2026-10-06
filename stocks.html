@@ -106,6 +106,9 @@
   .quote-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); margin-bottom: .75rem; }
   .quote-bar.error #quoteStatus { color: var(--up); }
   .tag.edit { cursor: pointer; }
+  .trend-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-bottom: 1rem; }
+  .trend-stats .stat { padding: .7rem .8rem; }
+  .trend-stats .stat-value { font-size: 16px; }
   .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
@@ -156,6 +159,10 @@
     .table-scroll table.hold { display: none; }
     .hcards { display: block; }
     .hm { display: none; }
+    .trend-stats { gap: 6px; }
+    .trend-stats .stat { padding: .6rem .6rem; }
+    .trend-stats .stat-value { font-size: 13px; letter-spacing: -0.3px; }
+    .trend-stats .stat-label { font-size: 11px; }
     input, select { font-size: 16px; min-height: 42px; }
     .btn { min-height: 42px; }
     .tab { padding: 9px 11px; }
@@ -199,6 +206,7 @@
   <div class="page-nav" id="pageNav">
     <button data-page="home" onclick="showPage('home')"><span class="ic">📊</span><span>요약</span></button>
     <button data-page="holdings" onclick="showPage('holdings')"><span class="ic">💼</span><span>보유 종목</span></button>
+    <button data-page="trend" onclick="showPage('trend')"><span class="ic">📈</span><span>자산 추이</span></button>
     <button data-page="monthly" onclick="showPage('monthly')"><span class="ic">📅</span><span>월별 성과</span></button>
     <button data-page="money" onclick="showPage('money')"><span class="ic">💰</span><span>입출금</span></button>
   </div>
@@ -250,6 +258,18 @@
     </div>
     <div class="chips" id="sectorChips"></div>
     <div class="note">여기서 추가한 섹터는 종목 입력창의 추천 목록에 나와요. ✎로 이름을 바꾸면 그 섹터의 종목도 함께 바뀌고, ✕로 지우면 해당 종목은 "미분류"가 돼요.</div>
+  </div>
+  </section>
+
+  <section class="page" data-page="trend">
+  <div class="card">
+    <div class="card-label">자산 총계 추이 (평가금액 + 현금)</div>
+    <div class="tabs" id="tViewTabs"></div>
+    <div class="tabs" id="tAcctTabs"></div>
+    <div class="trend-stats" id="trendStats"></div>
+    <div class="chart-wrap" style="height:260px"><canvas id="trendChart" role="img" aria-label="자산 총계 추이 꺾은선 차트"></canvas></div>
+    <div class="table-scroll" id="trendTable" style="margin-top:1rem"></div>
+    <div class="note">일별 기록은 앱을 열 때마다 그날 값으로 자동 저장돼요(그날 마지막으로 연 시점의 값). 앱을 열지 않은 날은 기록이 비어 있고, 입금·출금도 자산 총계에 그대로 반영돼요. 입출금을 뺀 순수 투자 성과는 "월별 성과" 탭에서 볼 수 있어요.</div>
   </div>
   </section>
 
@@ -317,10 +337,10 @@ const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
 const DEFAULT_SECTORS = ['반도체','IT/소프트웨어','인터넷/플랫폼','2차전지','자동차','바이오/헬스케어','금융','에너지','소비재','통신','산업재','방산','부동산/리츠','ETF(지수)','ETF(섹터)','기타'];
-let state = { rate: 1400, holdings: [], realized: [], snapshots: [], flows: [], cash: {} };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {} };
 function normalize() {
   state.holdings = state.holdings || []; state.realized = state.realized || [];
-  state.snapshots = state.snapshots || []; state.flows = state.flows || [];
+  state.snapshots = state.snapshots || []; state.flows = state.flows || []; state.daily = state.daily || [];
   state.cash = state.cash || {};
   if (!Array.isArray(state.sectors)) state.sectors = DEFAULT_SECTORS.slice();
 }
@@ -463,7 +483,7 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], cash: d.cash || {} };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {} };
       normalize();
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
@@ -529,7 +549,7 @@ function delRealized(id) {
   state.realized = state.realized.filter(r => r.id !== id); persist(); render();
 }
 function setFilter(f) { filter = f; render(); }
-const PAGES = ['home', 'holdings', 'monthly', 'money'], LS_PAGE = 'stockDashboardPage';
+const PAGES = ['home', 'holdings', 'trend', 'monthly', 'money'], LS_PAGE = 'stockDashboardPage';
 function showPage(name, rerender = true) {
   if (!PAGES.includes(name)) name = 'home';
   document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.dataset.page === name));
@@ -603,6 +623,7 @@ function render() {
   renderCharts(per);
   renderSectorManager();
   renderSectors();
+  renderTrend();
   renderMonthly();
   renderHoldings();
   renderFlows();
@@ -648,6 +669,7 @@ function renderFlows() {
 
 /* ---------- 월별 누적 성과 ---------- */
 const curMonth = () => new Date().toISOString().slice(0, 7);
+const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // 이번 달 스냅샷을 현재 보유 현황으로 자동 갱신 (지난달 기록은 건드리지 않음)
 function syncSnapshot() {
@@ -655,13 +677,19 @@ function syncSnapshot() {
   const { per } = compute();
   const accounts = {};
   ACCOUNTS.forEach(a => accounts[a.id] = { value: Math.round(per[a.id].value), cost: Math.round(per[a.id].cost), cash: Math.round(per[a.id].cash) });
-  const m = curMonth();
-  state.snapshots = state.snapshots || [];
-  const i = state.snapshots.findIndex(x => x.month === m);
-  const next = { month: m, accounts };
-  if (i >= 0 && JSON.stringify(state.snapshots[i]) === JSON.stringify(next)) return;
-  if (i >= 0) state.snapshots[i] = next; else state.snapshots.push(next);
-  persist();
+  let changed = false;
+  const upsert = (list, key, val) => {                      // 오늘(이번 달) 기록을 갱신, 내용이 같으면 건드리지 않음
+    const i = list.findIndex(x => x[key] === val);
+    const next = { [key]: val, accounts };
+    if (i >= 0 && JSON.stringify(list[i]) === JSON.stringify(next)) return;
+    if (i >= 0) list[i] = next; else list.push(next);
+    changed = true;
+  };
+  state.snapshots = state.snapshots || []; state.daily = state.daily || [];
+  upsert(state.snapshots, 'month', curMonth());
+  upsert(state.daily, 'date', todayStr());
+  if (state.daily.length > 800) { state.daily.sort((x, y) => x.date.localeCompare(y.date)); state.daily = state.daily.slice(-800); changed = true; }
+  if (changed) persist();
 }
 
 function addSnapshot() {
@@ -683,6 +711,66 @@ function delSnapshot(month) {
   if (!confirm(`${month} 기록을 삭제할까요?`)) return;
   state.snapshots = state.snapshots.filter(x => x.month !== month); persist(); render();
 }
+/* ---------- 자산 총계 추이 (일별 / 월별) ---------- */
+let tView = 'daily', tAcct = 'all', tRange = 90, tChart = null;
+function setTView(v) { tView = v; renderTrend(); }
+function setTAcct(a) { tAcct = a; renderTrend(); }
+function setTRange(n) { tRange = n; renderTrend(); }
+function trendSeries() {
+  const ids = tAcct === 'all' ? ACCOUNTS.map(a => a.id) : [tAcct];
+  const src = tView === 'daily'
+    ? (state.daily || []).map(x => ({ label: x.date, accounts: x.accounts }))
+    : (state.snapshots || []).map(x => ({ label: x.month, accounts: x.accounts }));
+  src.sort((a, b) => a.label.localeCompare(b.label));
+  let rows = src.map(x => ({ label: x.label, total: ids.reduce((sum, id) => { const a = x.accounts[id]; return a ? sum + a.value + (a.cash || 0) : sum; }, 0) }));
+  rows.forEach((r, i) => { r.delta = i ? r.total - rows[i - 1].total : null; r.pct = i && rows[i - 1].total ? r.delta / rows[i - 1].total * 100 : null; });
+  if (tView === 'daily' && tRange > 0 && rows.length) {      // 최근 N일만
+    const cut = new Date(Date.now() - tRange * 86400000).toISOString().slice(0, 10);
+    rows = rows.filter(r => r.label >= cut);
+  }
+  return rows;
+}
+function renderTrend() {
+  const tabs = (items, cur, fn) => items.map(([id, name]) => `<button class="tab ${cur === id ? 'active' : ''}" onclick="${fn}('${id}')">${name}</button>`).join('');
+  document.getElementById('tViewTabs').innerHTML =
+    tabs([['daily', '일별'], ['monthly', '월별']], tView, 'setTView') +
+    (tView === 'daily' ? `<span style="flex:1"></span>` + [[30, '30일'], [90, '90일'], [365, '1년'], [0, '전체']].map(([n, name]) => `<button class="tab ${tRange === n ? 'active' : ''}" onclick="setTRange(${n})">${name}</button>`).join('') : '');
+  document.getElementById('tAcctTabs').innerHTML = tabs([['all', '전체'], ...ACCOUNTS.map(a => [a.id, a.name])], tAcct, 'setTAcct');
+  const rows = trendSeries();
+  const unit = tView === 'daily' ? '전일' : '전월';
+  if (tChart) { tChart.destroy(); tChart = null; }
+  if (!rows.length) {
+    document.getElementById('trendStats').innerHTML = '';
+    document.getElementById('trendTable').innerHTML = `<div class="empty">아직 ${tView === 'daily' ? '일별' : '월별'} 기록이 없어요.<br>${tView === 'daily' ? '오늘부터 앱을 열 때마다 자동으로 쌓여요.' : '종목을 추가하면 이번 달 기록이 시작돼요.'}</div>`;
+    return;
+  }
+  const last = rows[rows.length - 1], first = rows[0];
+  const stat = (label, value, sub, c) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value ${c || ''}">${value}</div>${sub ? `<div class="stat-sub ${c || ''}">${sub}</div>` : ''}</div>`;
+  const span = last.total - first.total, spanPct = first.total ? span / first.total * 100 : 0;
+  document.getElementById('trendStats').innerHTML =
+    stat('현재 총자산', fmtKRW(last.total), last.label) +
+    stat(`${unit} 대비`, last.delta === null ? '-' : signKRW(last.delta), last.pct === null ? '' : fmtPct(last.pct), last.delta === null ? '' : cls(last.delta)) +
+    stat('기간 증감', rows.length > 1 ? signKRW(span) : '-', rows.length > 1 ? fmtPct(spanPct) : '', rows.length > 1 ? cls(span) : '');
+  if (typeof Chart !== 'undefined') {
+    const tc = cssVar('--text-muted'), accent = cssVar('--accent');
+    tChart = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: { labels: rows.map(r => tView === 'daily' ? r.label.slice(5).replace('-', '/') : r.label),
+        datasets: [{ label: '총자산', data: rows.map(r => Math.round(r.total)), borderColor: accent, backgroundColor: accent + '22', fill: true, borderWidth: 2, pointRadius: rows.length > 40 ? 0 : 3, pointHoverRadius: 5, tension: 0.2 }] },
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: { callbacks: {
+          title: items => rows[items[0].dataIndex].label,
+          label: c => ` 총자산: ${fmtKRW(c.raw)}`,
+          afterLabel: c => { const r = rows[c.dataIndex]; return r.delta === null ? '' : ` ${unit} 대비: ${signKRW(r.delta)} (${fmtPct(r.pct)})`; } } } },
+        scales: { x: { grid: { display: false }, ticks: { color: tc, font: { size: 11 }, maxTicksLimit: 8, autoSkip: true } },
+                  y: { grid: { color: 'rgba(128,128,128,0.15)' }, ticks: { color: tc, font: { size: 11 }, callback: v => (v / 10000).toLocaleString('ko-KR') + '만' } } } }
+    });
+  }
+  document.getElementById('trendTable').innerHTML = `<table><thead><tr><th>${tView === 'daily' ? '날짜' : '월'}</th><th>총자산</th><th>${unit} 대비</th><th>증감률</th></tr></thead><tbody>` +
+    rows.slice().reverse().slice(0, 200).map(r => `<tr><td>${r.label}</td><td>${fmtKRW(r.total)}</td>
+      <td class="${cls(r.delta || 0)}">${r.delta === null ? '-' : signKRW(r.delta)}</td><td class="${cls(r.pct || 0)}">${r.pct === null ? '-' : fmtPct(r.pct)}</td></tr>`).join('') + '</tbody></table>';
+}
+
 function setMFilter(f) { mFilter = f; renderMonthly(); }
 
 function monthlyRows() {
