@@ -1,0 +1,9 @@
+{
+  "name": "우리집 냉장고",
+  "short_name": "냉장고",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f5f3",
+  "theme_color": "#2a78d6",
+  "icons": [{"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}]
+}
