@@ -36,7 +36,16 @@
   button.primary { background:var(--accent); color:#fff; border:none; border-radius:10px; font-size:17px; padding:12px 18px; cursor:pointer; white-space:nowrap; }
   button.primary:disabled { opacity:.5; }
   .hint { font-size:13px; color:var(--text3); margin-top:8px; line-height:1.5; }
-  .preview { font-size:14px; color:var(--accent); margin-top:8px; min-height:20px; }
+  .preview { font-size:14px; color:var(--accent); margin:10px 0; min-height:20px; }
+  .seg { display:flex; background:var(--muted-bg); border-radius:10px; padding:3px; margin-top:8px; }
+  .seg button { flex:1; border:none; background:none; color:var(--text2); font-size:16px; padding:10px 4px; border-radius:8px; cursor:pointer; }
+  .seg button.on { background:var(--surface); color:var(--text); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.15); }
+  .seg.loc button.on[data-v="냉장"] { background:var(--accent); color:#fff; }
+  .seg.loc button.on[data-v="냉동"] { background:#3aa6c9; color:#fff; }
+  .lbl { font-size:13px; color:var(--text3); margin-top:12px; }
+  .date-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .date-row input { width:80px; text-align:center; }
+  .date-row span { color:var(--text2); }
   .tabs { display:flex; gap:6px; margin-bottom:.75rem; }
   .tab { flex:1; padding:8px 0; border:1px solid var(--border); background:var(--surface); color:var(--text2); border-radius:999px; font-size:14px; cursor:pointer; }
   .tab.on { background:var(--accent); color:#fff; border-color:var(--accent); }
@@ -83,15 +92,29 @@
 
   <!-- 입력 -->
   <div class="card">
-    <input id="quick" placeholder="예: 우유 2개 10/25 · 김치 담근 10/1" autocomplete="off" enterkeyhint="done">
-    <div class="preview" id="preview"></div>
-    <div class="row">
-      <select id="loc" style="flex:1">
-        <option>냉장</option><option>냉동</option><option>실온</option>
-      </select>
-      <button class="primary" id="addBtn">추가</button>
+    <input id="name" placeholder="재료 이름 (예: 우유)" autocomplete="off" enterkeyhint="next">
+    <input id="qty" placeholder="수량 (선택, 예: 2개)" autocomplete="off" style="margin-top:8px">
+
+    <div class="lbl">보관 위치</div>
+    <div class="seg loc" id="locSeg" style="margin-top:4px">
+      <button type="button" data-v="냉장" class="on">🧊 냉장</button>
+      <button type="button" data-v="냉동">❄️ 냉동</button>
     </div>
-    <p class="hint">🎤 키보드의 마이크로 말해도 돼요. "두부 1모 3일 후", "삼겹살 냉동 한 팩"처럼 적으면 알아서 나눠요.<br>유통기한이 없으면 "김치 담근 10/1", "고추장 구입 어제"처럼 적어 두세요. 며칠째인지 보여 주고, 오래되면 알려 드려요.</p>
+
+    <div class="lbl">날짜</div>
+    <div class="seg" id="kindSeg" style="margin-top:4px">
+      <button type="button" data-v="expiry" class="on">유통기한</button>
+      <button type="button" data-v="made">구입·제조일</button>
+      <button type="button" data-v="none">날짜 없음</button>
+    </div>
+    <div class="date-row" id="dateRow">
+      <input id="mon" type="number" inputmode="numeric" min="1" max="12" placeholder="월"><span>월</span>
+      <input id="day" type="number" inputmode="numeric" min="1" max="31" placeholder="일"><span>일</span>
+    </div>
+
+    <div class="preview" id="preview"></div>
+    <button class="primary" id="addBtn" style="width:100%">추가</button>
+    <p class="hint">🎤 이름 칸에서 키보드의 마이크로 말해도 돼요.<br>유통기한이 없는 재료는 "구입·제조일"을 고르면 며칠째인지 보여 주고, 오래되면 알려 드려요. "날짜 없음"은 오늘부터 세요.</p>
   </div>
 
   <div class="alert" id="alert" hidden></div>
@@ -100,7 +123,6 @@
     <button class="tab on" data-f="전체">전체</button>
     <button class="tab" data-f="냉장">냉장</button>
     <button class="tab" data-f="냉동">냉동</button>
-    <button class="tab" data-f="실온">실온</button>
   </div>
 
   <div class="card" id="list"></div>
@@ -125,58 +147,22 @@ let WHO = store.get('fridgeWho', '');
 let items = store.get('fridgeItems', []);
 let filter = '전체';
 
-/* ---------- 문장 분해 ---------- */
+/* ---------- 날짜 ---------- */
 const pad = n => String(n).padStart(2, '0');
 const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
-function parseQuick(text, now = today()) {
-  let s = text.trim(), expiry = '', loc = '', qty = '';
-
-  // "구입/제조/담근" 같은 말이 있으면 날짜는 유통기한이 아니라 시작일(made)로 본다
-  // 음성 입력은 "10월"을 "시월"처럼 한글로 적기도 하므로 숫자로 바꿔 둔다
-  const KMON = { '십이월': 12, '십일월': 11, '시월': 10, '유월': 6, '일월': 1, '이월': 2, '삼월': 3, '사월': 4, '오월': 5, '칠월': 7, '팔월': 8, '구월': 9 };
-  s = s.replace(/(십이월|십일월|시월|유월|일월|이월|삼월|사월|오월|칠월|팔월|구월)(?=\s*\d{1,2}\s*일)/g, k => `${KMON[k]}월`);
-  const madeMode = /구입|구매|제조일|제조|담근|담금|만든|부터/.test(s);
-  s = s.replace(/부터/g, ' ');
-  s = s.replace(/구입일?|구매일?|제조일|제조|담근날?|담금|만든날?|만든/g, ' ');
-
-  // 위치
-  const lm = s.match(/냉장|냉동|실온/);
-  if (lm) { loc = lm[0]; s = s.replace(lm[0], ' '); }
-
-  // N일/주/달 후, 내일, 모레
-  let m;
-  const add = n => { const d = new Date(now); d.setDate(d.getDate() + n); return fmt(d); };
-  if ((m = s.match(/(\d+)\s*일\s*전/))) { expiry = add(-m[1]); s = s.replace(m[0], ' '); }
-  else if ((m = s.match(/그저께|그제/))) { expiry = add(-2); s = s.replace(m[0], ' '); }
-  else if ((m = s.match(/어제/))) { expiry = add(-1); s = s.replace(m[0], ' '); }
-  else if ((m = s.match(/(\d+)\s*일\s*(후|뒤)/))) { expiry = add(+m[1]); s = s.replace(m[0], ' '); }
-  else if ((m = s.match(/(\d+)\s*주\s*(후|뒤)/))) { expiry = add(+m[1] * 7); s = s.replace(m[0], ' '); }
-  else if ((m = s.match(/(\d+)\s*(달|개월)\s*(후|뒤)/))) {
-    const d = new Date(now); d.setMonth(d.getMonth() + +m[1]); expiry = fmt(d); s = s.replace(m[0], ' ');
-  }
-  else if ((m = s.match(/모레/))) { expiry = add(2); s = s.replace(m[0], ' '); }
-  else if ((m = s.match(/내일/))) { expiry = add(1); s = s.replace(m[0], ' '); }
-  // 10월 25일 / 10/25 / 10.25
-  else if ((m = s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일?/)) || (m = s.match(/(\d{1,2})\s*[\/.]\s*(\d{1,2})/))) {
-    let y = now.getFullYear();
-    let d = new Date(y, +m[1] - 1, +m[2]);
-    if (madeMode) { if (d > now) d = new Date(y - 1, +m[1] - 1, +m[2]); }
-    else if (d < now) d = new Date(y + 1, +m[1] - 1, +m[2]);
-    expiry = fmt(d); s = s.replace(m[0], ' ');
-  }
-  s = s.replace(/(까지|유통기한|소비기한)/g, ' ');
-
-  // 수량: 숫자 + 단위, 또는 한글 수사 + 단위
-  const unit = '개|팩|봉지|봉|모|병|통|캔|판|단|줄|마리|근|kg|g|ml|L|리터|장|조각|포기|송이|상자|박스';
-  const kor = { '한': 1, '두': 2, '세': 3, '네': 4, '다섯': 5, '여섯': 6, '일곱': 7, '여덟': 8, '아홉': 9, '열': 10 };
-  if ((m = s.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${unit})`)))) { qty = m[1] + m[2]; s = s.replace(m[0], ' '); }
-  else if ((m = s.match(new RegExp(`(${Object.keys(kor).join('|')})\\s*(${unit})`)))) { qty = kor[m[1]] + m[2]; s = s.replace(m[0], ' '); }
-
-  const name = s.replace(/\s+/g, ' ').trim();
-  if (madeMode) return { name, qty, loc, expiry: '', made: expiry };
-  return { name, qty, loc, expiry, made: '' };
+// 월/일 → yyyy-MM-dd. 연도는 자동: 유통기한은 오늘 이후 가장 가까운 날, 구입·제조일은 오늘 이전 가장 가까운 날.
+function buildDate(mon, day, kind, now = today()) {
+  const m = +mon, d = +day, y = now.getFullYear();
+  if (!m || !d) return { date: '', err: '' };
+  const make = yy => new Date(yy, m - 1, d);
+  const ok = dt => dt.getMonth() === m - 1 && dt.getDate() === d;
+  let dt = make(y);
+  if (m < 1 || m > 12 || !ok(dt)) return { date: '', err: '없는 날짜예요' };
+  if (kind === 'made') { if (dt > now) dt = make(y - 1); }
+  else if (dt < now) dt = make(y + 1);
+  return { date: fmt(dt), err: '' };
 }
 
 /* ---------- 표시 ---------- */
@@ -265,26 +251,62 @@ async function send(payload) {
 }
 
 /* ---------- 이벤트 ---------- */
-$('quick').addEventListener('input', () => {
-  const p = parseQuick($('quick').value);
-  $('preview').textContent = p.name
-    ? `→ ${p.name}${p.qty ? ' · ' + p.qty : ''}${p.expiry ? ' · ~' + p.expiry : p.made ? ' · ' + p.made + '부터' : ' · 오늘부터 일수 세기'}` : '';
-  if (p.loc) $('loc').value = p.loc;
+let kind = 'expiry';
+let loc = store.get('fridgeLoc', '냉장');
+
+function setSeg(id, val) {
+  document.querySelectorAll(`#${id} button`).forEach(b => b.classList.toggle('on', b.dataset.v === val));
+}
+function formState() {
+  const name = $('name').value.trim();
+  const { date, err } = kind === 'none' ? { date: '', err: '' } : buildDate($('mon').value, $('day').value, kind);
+  return { name, qty: $('qty').value.trim(), date, err };
+}
+function updatePreview() {
+  const f = formState();
+  $('dateRow').hidden = kind === 'none';
+  let t = '';
+  if (f.err) t = '⚠️ ' + f.err;
+  else if (f.name) {
+    const when = kind === 'none' ? '오늘부터 일수 세기'
+      : !f.date ? (kind === 'expiry' ? '유통기한 없음 (오늘부터 일수 세기)' : '오늘부터 일수 세기')
+      : kind === 'expiry' ? `~${f.date}까지` : `${f.date}부터`;
+    t = `→ ${loc} · ${f.name}${f.qty ? ' · ' + f.qty : ''} · ${when}`;
+  }
+  $('preview').textContent = t;
+}
+
+$('locSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  loc = b.dataset.v; store.set('fridgeLoc', loc); setSeg('locSeg', loc); updatePreview();
 });
+$('kindSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  kind = b.dataset.v; setSeg('kindSeg', kind);
+  // 구입·제조일은 대부분 오늘이므로 오늘 날짜를 미리 채워 준다
+  if (kind === 'made' && !$('mon').value && !$('day').value) {
+    const t = today(); $('mon').value = t.getMonth() + 1; $('day').value = t.getDate();
+  }
+  updatePreview();
+});
+['name', 'qty', 'mon', 'day'].forEach(id => $(id).addEventListener('input', updatePreview));
+setSeg('locSeg', loc); updatePreview();
 
 async function addItem() {
   if (!URL_) { $('setup').hidden = false; return; }
-  const p = parseQuick($('quick').value);
-  if (!p.name) return;
+  const f = formState();
+  if (!f.name || f.err) { if (!f.name) $('name').focus(); return; }
   const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-    name: p.name, qty: p.qty, loc: p.loc || $('loc').value, expiry: p.expiry, by: WHO,
-    added: p.made || fmt(today()) };
+    name: f.name, qty: f.qty, loc, by: WHO,
+    expiry: kind === 'expiry' ? f.date : '',
+    added: kind === 'made' && f.date ? f.date : fmt(today()) };
   items.push(item); store.set('fridgeItems', items); render();
-  $('quick').value = ''; $('preview').textContent = '';
+  $('name').value = ''; $('qty').value = ''; $('mon').value = ''; $('day').value = '';
+  updatePreview();
   await send({ action: 'add', ...item });
 }
 $('addBtn').onclick = addItem;
-$('quick').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+$('name').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
 
 $('list').addEventListener('click', async e => {
   const b = e.target.closest('button[data-id]'); if (!b) return;
