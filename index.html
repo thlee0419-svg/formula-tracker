@@ -83,7 +83,7 @@
 
   <!-- 입력 -->
   <div class="card">
-    <input id="quick" placeholder="예: 우유 2개 10/25" autocomplete="off" enterkeyhint="done">
+    <input id="quick" placeholder="예: 우유 2개 10/25 · 김치 담근 10/1" autocomplete="off" enterkeyhint="done">
     <div class="preview" id="preview"></div>
     <div class="row">
       <select id="loc" style="flex:1">
@@ -91,7 +91,7 @@
       </select>
       <button class="primary" id="addBtn">추가</button>
     </div>
-    <p class="hint">🎤 키보드의 마이크로 말해도 돼요. "두부 1모 3일 후", "삼겹살 냉동 한 팩"처럼 적으면 알아서 나눠요.</p>
+    <p class="hint">🎤 키보드의 마이크로 말해도 돼요. "두부 1모 3일 후", "삼겹살 냉동 한 팩"처럼 적으면 알아서 나눠요.<br>유통기한이 없으면 "김치 담근 10/1", "고추장 구입 어제"처럼 적어 두세요. 며칠째인지 보여 주고, 오래되면 알려 드려요.</p>
   </div>
 
   <div class="alert" id="alert" hidden></div>
@@ -133,6 +133,10 @@ const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 function parseQuick(text, now = today()) {
   let s = text.trim(), expiry = '', loc = '', qty = '';
 
+  // "구입/제조/담근" 같은 말이 있으면 날짜는 유통기한이 아니라 시작일(made)로 본다
+  const madeMode = /구입|구매|제조일|제조|담근|담금|만든/.test(s);
+  s = s.replace(/구입일?|구매일?|제조일|제조|담근날?|담금|만든날?|만든/g, ' ');
+
   // 위치
   const lm = s.match(/냉장|냉동|실온/);
   if (lm) { loc = lm[0]; s = s.replace(lm[0], ' '); }
@@ -140,7 +144,10 @@ function parseQuick(text, now = today()) {
   // N일/주/달 후, 내일, 모레
   let m;
   const add = n => { const d = new Date(now); d.setDate(d.getDate() + n); return fmt(d); };
-  if ((m = s.match(/(\d+)\s*일\s*(후|뒤)/))) { expiry = add(+m[1]); s = s.replace(m[0], ' '); }
+  if ((m = s.match(/(\d+)\s*일\s*전/))) { expiry = add(-m[1]); s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/그저께|그제/))) { expiry = add(-2); s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/어제/))) { expiry = add(-1); s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/(\d+)\s*일\s*(후|뒤)/))) { expiry = add(+m[1]); s = s.replace(m[0], ' '); }
   else if ((m = s.match(/(\d+)\s*주\s*(후|뒤)/))) { expiry = add(+m[1] * 7); s = s.replace(m[0], ' '); }
   else if ((m = s.match(/(\d+)\s*(달|개월)\s*(후|뒤)/))) {
     const d = new Date(now); d.setMonth(d.getMonth() + +m[1]); expiry = fmt(d); s = s.replace(m[0], ' ');
@@ -151,7 +158,8 @@ function parseQuick(text, now = today()) {
   else if ((m = s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일?/)) || (m = s.match(/(\d{1,2})\s*[\/.]\s*(\d{1,2})/))) {
     let y = now.getFullYear();
     let d = new Date(y, +m[1] - 1, +m[2]);
-    if (d < now) d = new Date(y + 1, +m[1] - 1, +m[2]);
+    if (madeMode) { if (d > now) d = new Date(y - 1, +m[1] - 1, +m[2]); }
+    else if (d < now) d = new Date(y + 1, +m[1] - 1, +m[2]);
     expiry = fmt(d); s = s.replace(m[0], ' ');
   }
   s = s.replace(/(까지|유통기한|소비기한)/g, ' ');
@@ -163,7 +171,8 @@ function parseQuick(text, now = today()) {
   else if ((m = s.match(new RegExp(`(${Object.keys(kor).join('|')})\\s*(${unit})`)))) { qty = kor[m[1]] + m[2]; s = s.replace(m[0], ' '); }
 
   const name = s.replace(/\s+/g, ' ').trim();
-  return { name, qty, loc, expiry };
+  if (madeMode) return { name, qty, loc, expiry: '', made: expiry };
+  return { name, qty, loc, expiry, made: '' };
 }
 
 /* ---------- 표시 ---------- */
@@ -172,9 +181,20 @@ function daysLeft(expiry) {
   const [y, mo, d] = expiry.split('-').map(Number);
   return Math.round((new Date(y, mo - 1, d) - today()) / 86400000);
 }
-function ddayInfo(expiry) {
+// 유통기한이 없는 재료: 기준일(구입/제조일)부터 며칠 지났는지. 위치별로 '오래됨' 기준이 다르다.
+const AGE_WARN = { '냉장': [14, 30], '냉동': [90, 180], '실온': [30, 90] }; // [노랑, 빨강] 일수
+function ageDays(i) { const n = daysLeft(i.added); return n === null ? null : -n; }
+function ageClass(i) {
+  const n = ageDays(i), [w, r] = AGE_WARN[i.loc] || AGE_WARN['냉장'];
+  return n === null ? '' : n >= r ? 'red' : n >= w ? 'amber' : '';
+}
+function ddayInfo(i) {
+  if (!i.expiry) {
+    const n = ageDays(i);
+    return n === null ? { text: '기한 없음', cls: '' } : { text: n === 0 ? '오늘 구입' : `${n}일째`, cls: ageClass(i) };
+  }
+  const expiry = i.expiry;
   const n = daysLeft(expiry);
-  if (n === null) return { text: '기한 없음', cls: '' };
   if (n < 0) return { text: `${-n}일 지남`, cls: 'red' };
   if (n === 0) return { text: 'D-day', cls: 'red' };
   return { text: `D-${n}`, cls: n <= 3 ? 'red' : n <= 7 ? 'amber' : 'green' };
@@ -182,18 +202,22 @@ function ddayInfo(expiry) {
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function render() {
-  const sorted = [...items].sort((a, b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'));
+  // 유통기한 있는 것은 임박 순, 없는 것은 그 뒤에 오래된 순
+  const sorted = [...items].sort((a, b) =>
+    a.expiry && b.expiry ? a.expiry.localeCompare(b.expiry)
+    : a.expiry ? -1 : b.expiry ? 1
+    : (a.added || '9999').localeCompare(b.added || '9999'));
   const shown = sorted.filter(i => filter === '전체' || i.loc === filter);
 
-  const urgent = sorted.filter(i => { const n = daysLeft(i.expiry); return n !== null && n <= 3; });
+  const urgent = sorted.filter(i => i.expiry ? daysLeft(i.expiry) <= 3 : ageClass(i) === 'red');
   const al = $('alert');
   if (urgent.length) {
     al.hidden = false;
-    al.innerHTML = `⚠️ 빨리 먹어야 해요 (${urgent.length}개)<br>` + urgent.map(i => `${esc(i.name)} <b>${ddayInfo(i.expiry).text}</b>`).join(' · ');
+    al.innerHTML = `⚠️ 확인이 필요해요 (${urgent.length}개)<br>` + urgent.map(i => `${esc(i.name)} <b>${ddayInfo(i).text}</b>`).join(' · ');
   } else al.hidden = true;
 
   $('list').innerHTML = shown.length ? shown.map(i => {
-    const d = ddayInfo(i.expiry);
+    const d = ddayInfo(i);
     const meta = [i.loc, i.qty, i.by && `${i.by} 등록`].filter(Boolean).map(esc).join(' · ');
     return `<div class="item">
       <div class="info"><div class="name">${esc(i.name)}</div><div class="meta">${meta}</div></div>
@@ -227,7 +251,7 @@ async function send(payload) {
 $('quick').addEventListener('input', () => {
   const p = parseQuick($('quick').value);
   $('preview').textContent = p.name
-    ? `→ ${p.name}${p.qty ? ' · ' + p.qty : ''}${p.expiry ? ' · ~' + p.expiry : ' · 기한 없음'}` : '';
+    ? `→ ${p.name}${p.qty ? ' · ' + p.qty : ''}${p.expiry ? ' · ~' + p.expiry : p.made ? ' · ' + p.made + '부터' : ' · 오늘부터 일수 세기'}` : '';
   if (p.loc) $('loc').value = p.loc;
 });
 
@@ -236,7 +260,8 @@ async function addItem() {
   const p = parseQuick($('quick').value);
   if (!p.name) return;
   const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-    name: p.name, qty: p.qty, loc: p.loc || $('loc').value, expiry: p.expiry, by: WHO };
+    name: p.name, qty: p.qty, loc: p.loc || $('loc').value, expiry: p.expiry, by: WHO,
+    added: p.made || fmt(today()) };
   items.push(item); store.set('fridgeItems', items); render();
   $('quick').value = ''; $('preview').textContent = '';
   await send({ action: 'add', ...item });

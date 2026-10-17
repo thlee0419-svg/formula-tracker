@@ -18,6 +18,7 @@ function doGet() {
     id: r[0], name: r[1], qty: r[2], loc: r[3],
     expiry: r[4] instanceof Date ? Utilities.formatDate(r[4], 'Asia/Seoul', 'yyyy-MM-dd') : String(r[4]),
     by: r[5],
+    added: r[6] instanceof Date ? Utilities.formatDate(r[6], 'Asia/Seoul', 'yyyy-MM-dd') : String(r[6]),
   }));
   return out_({ items });
 }
@@ -27,7 +28,7 @@ function doPost(e) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     if (d.action === 'add') {
-      s.appendRow([d.id, d.name, d.qty, d.loc, d.expiry, d.by, new Date(), '보관중']);
+      s.appendRow([d.id, d.name, d.qty, d.loc, d.expiry, d.by, d.added || new Date(), '보관중']);
     } else if (d.action === 'done') { // status: 먹음 | 버림
       const ids = s.getRange(1, 1, s.getLastRow(), 1).getValues().flat();
       const i = ids.indexOf(d.id);
