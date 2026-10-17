@@ -134,7 +134,11 @@ function parseQuick(text, now = today()) {
   let s = text.trim(), expiry = '', loc = '', qty = '';
 
   // "구입/제조/담근" 같은 말이 있으면 날짜는 유통기한이 아니라 시작일(made)로 본다
-  const madeMode = /구입|구매|제조일|제조|담근|담금|만든/.test(s);
+  // 음성 입력은 "10월"을 "시월"처럼 한글로 적기도 하므로 숫자로 바꿔 둔다
+  const KMON = { '십이월': 12, '십일월': 11, '시월': 10, '유월': 6, '일월': 1, '이월': 2, '삼월': 3, '사월': 4, '오월': 5, '칠월': 7, '팔월': 8, '구월': 9 };
+  s = s.replace(/(십이월|십일월|시월|유월|일월|이월|삼월|사월|오월|칠월|팔월|구월)(?=\s*\d{1,2}\s*일)/g, k => `${KMON[k]}월`);
+  const madeMode = /구입|구매|제조일|제조|담근|담금|만든|부터/.test(s);
+  s = s.replace(/부터/g, ' ');
   s = s.replace(/구입일?|구매일?|제조일|제조|담근날?|담금|만든날?|만든/g, ' ');
 
   // 위치
@@ -176,10 +180,22 @@ function parseQuick(text, now = today()) {
 }
 
 /* ---------- 표시 ---------- */
+// 시트에서 온 날짜가 yyyy-MM-dd가 아니어도(예: "2026. 10. 25", "Sat Oct 25 ...") 읽어 본다. 못 읽으면 빈 값.
+function normDate(v) {
+  if (!v) return '';
+  const str = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const m = str.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  if (!/\d{4}/.test(str)) return '';
+  const d = new Date(str);
+  return isNaN(d) ? '' : fmt(d);
+}
 function daysLeft(expiry) {
   if (!expiry) return null;
   const [y, mo, d] = expiry.split('-').map(Number);
-  return Math.round((new Date(y, mo - 1, d) - today()) / 86400000);
+  const n = Math.round((new Date(y, mo - 1, d) - today()) / 86400000);
+  return isNaN(n) ? null : n;
 }
 // 유통기한이 없는 재료: 기준일(구입/제조일)부터 며칠 지났는지. 위치별로 '오래됨' 기준이 다르다.
 const AGE_WARN = { '냉장': [14, 30], '냉동': [90, 180], '실온': [30, 90] }; // [노랑, 빨강] 일수
@@ -235,7 +251,8 @@ async function load() {
   try {
     const res = await fetch(`${URL_}?t=${Date.now()}`);
     const data = await res.json();
-    items = data.items; store.set('fridgeItems', items); render();
+    items = data.items.map(i => ({ ...i, expiry: normDate(i.expiry), added: normDate(i.added) }));
+    store.set('fridgeItems', items); render();
     setStatus('동기화됨 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
   } catch { setStatus('⚠️ 서버에 연결하지 못했어요. 저장된 목록을 보여드려요.'); }
 }
