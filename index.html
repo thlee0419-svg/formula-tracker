@@ -358,6 +358,10 @@ async function finishItem(id, status, grams) {
   const it = items.find(i => i.id === id);
   items = items.filter(i => i.id !== id); store.set('fridgeItems', items); render();
   const date = fmt(today());
+  if (status === '먹음' && it) {
+    eaten.push({ name: it.name, loc: it.loc, by: WHO, added: it.added || '', date });
+    store.set('fridgeEaten', eaten); if (!$('stats').hidden) renderStats();
+  }
   if (status === '버림' && it) {
     waste.push({ name: it.name, loc: it.loc, by: WHO, added: it.added || '', date, grams });
     store.set('fridgeWaste', waste); if (!$('stats').hidden) renderStats();
@@ -399,6 +403,7 @@ $('list').addEventListener('click', e => {
 
 /* ---------- 버린 음식 통계 ---------- */
 let waste = store.get('fridgeWaste', []);
+let eaten = store.get('fridgeEaten', []);
 const fmtG = g => g >= 1000 ? `${(g / 1000).toFixed(g >= 10000 ? 0 : 2).replace(/\.?0+$/, '')}kg` : `${Math.round(g)}g`;
 const sumG = rows => rows.reduce((a, r) => a + (r.grams || 0), 0);
 const bars = (rows, labelOf, valOf, fmtVal) => {
@@ -408,10 +413,9 @@ const bars = (rows, labelOf, valOf, fmtVal) => {
     <span class="val">${fmtVal(r)}</span></div>`).join('');
 };
 
-function renderStats(note) {
-  const el = $('stats');
-  if (note) { el.innerHTML = `<div class="empty">${note}</div>`; return; }
-  if (!waste.length) { el.innerHTML = '<div class="empty">아직 버린 기록이 없어요 👏<br><span class="stat-sub">"버렸어요"를 누르면 여기에 쌓여요.</span></div>'; return; }
+function wasteHtml(note) {
+  if (note) return `<div class="empty">${note}</div>`;
+  if (!waste.length) return '<div class="empty">아직 버린 기록이 없어요 👏<br><span class="stat-sub">"버렸어요"를 누르면 여기에 쌓여요.</span></div>';
 
   const now = today(), ym = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
   const thisM = ym(now), prevM = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1));
@@ -436,7 +440,7 @@ function renderStats(note) {
 
   const recent = [...waste].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 8);
 
-  el.innerHTML = `
+  return `
     <div class="stat-sub">${now.getMonth() + 1}월에 버린 음식</div>
     <div class="stat-big">${fmtG(sumG(cur))}</div>
     <div class="stat-sub">${cur.length}번 버렸어요${prev.length ? ` · 지난달보다 ${diff === 0 ? '같아요' : fmtG(Math.abs(diff)) + (diff > 0 ? ' 늘었어요' : ' 줄었어요')}` : ''}</div>
@@ -452,15 +456,67 @@ function renderStats(note) {
     ${unknown ? `<div class="hint">양을 모르는 ${unknown}건은 무게 합계에서 빠졌어요.</div>` : ''}`;
 }
 
+
+// 자주 먹는 재료: 먹은 횟수 순. 버린 횟수도 함께 보여서 "잘 먹는 것 / 잘 버리는 것"을 비교한다.
+function eatenHtml(note) {
+  if (note) return `<div class="empty">${note}</div>`;
+  if (!eaten.length) return '<div class="empty">아직 먹은 기록이 없어요<br><span class="stat-sub">"먹었어요"를 누르면 여기에 쌓여요.</span></div>';
+
+  const now = today(), ym = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  const thisM = ym(now);
+  const cur = eaten.filter(e => (e.date || '').startsWith(thisM));
+  const months = [...Array(6)].map((_, k) => ym(new Date(now.getFullYear(), now.getMonth() - 5 + k, 1)));
+  const monthRows = months.map(m => ({ m, n: eaten.filter(e => (e.date || '').startsWith(m)).length }));
+
+  const by = {};
+  const slot = n => (by[n] = by[n] || { name: n, eat: 0, waste: 0, ages: [] });
+  eaten.forEach(e => {
+    const r = slot((e.name || '').trim()); r.eat++;
+    if (e.added && e.date) { const a = Math.round((new Date(e.date) - new Date(e.added)) / 86400000); if (a >= 0) r.ages.push(a); }
+  });
+  waste.forEach(w => { slot((w.name || '').trim()).waste++; });
+  const all = Object.values(by).filter(r => r.eat > 0).sort((a, b) => b.eat - a.eat || a.waste - b.waste);
+  const top = all.slice(0, 8);
+  // 먹은 것보다 버린 것이 많은 재료 (살 때 줄여 볼 후보)
+  const wasteMore = Object.values(by).filter(r => r.waste > r.eat).sort((a, b) => (b.waste - b.eat) - (a.waste - a.eat)).slice(0, 5);
+  const avg = r => r.ages.length ? `평균 ${Math.round(r.ages.reduce((a, b) => a + b, 0) / r.ages.length)}일 만에` : '';
+
+  return `
+    <div class="stat-sub">${now.getMonth() + 1}월에 먹은 재료</div>
+    <div class="stat-big">${cur.length}번</div>
+    <div class="stat-sub">지금까지 모두 ${eaten.length}번 · 재료 ${all.length}가지</div>
+    <div class="stat-h">자주 먹는 재료 TOP 8</div>
+    ${bars(top, r => r.name, r => r.eat, r => `${r.eat}회${r.waste ? ` <span style="color:var(--red)">· 버림 ${r.waste}</span>` : ''}`)}
+    ${top.some(r => r.ages.length) ? `<div class="stat-h">먹기까지 걸린 기간</div>` + top.filter(r => r.ages.length).slice(0, 5).map(r => `<div class="bar-row"><span class="lab" style="width:auto;flex:1">${esc(r.name)}</span><span class="val" style="width:auto">${avg(r)}</span></div>`).join('') : ''}
+    <div class="stat-h">월별 먹은 횟수 (최근 6개월)</div>
+    ${bars(monthRows, r => `${+r.m.slice(5)}월`, r => r.n, r => r.n ? `${r.n}회` : '-')}
+    ${wasteMore.length ? `<div class="stat-h">먹는 것보다 버리는 게 많은 재료</div><div class="hint" style="margin-top:0">살 때 양을 줄여 보세요.</div>` + wasteMore.map(r => `<div class="bar-row"><span class="lab" style="width:auto;flex:1">${esc(r.name)}</span><span class="val" style="width:auto">먹음 ${r.eat} · 버림 ${r.waste}</span></div>`).join('') : ''}
+    ${eaten.some(e => !e.date) ? `<div class="hint">날짜 기록이 없는 예전 기록은 월별 집계에서 빠졌어요.</div>` : ''}`;
+}
+
+let statsView = 'eaten', statsNote = '';
+function renderStats(note) {
+  if (note !== undefined) statsNote = note;
+  const seg = `<div class="seg" id="viewSeg" style="margin:0 0 12px">
+    <button type="button" data-view="eaten" class="${statsView === 'eaten' ? 'on' : ''}">🍽 먹은 음식</button>
+    <button type="button" data-view="waste" class="${statsView === 'waste' ? 'on' : ''}">🗑 버린 음식</button></div>`;
+  $('stats').innerHTML = seg + (statsView === 'eaten' ? eatenHtml(statsNote) : wasteHtml(statsNote));
+}
+$('stats').addEventListener('click', e => {
+  const b = e.target.closest('button[data-view]'); if (!b) return;
+  statsView = b.dataset.view; renderStats();
+});
+
 async function loadWaste() {
-  renderStats();
+  renderStats('');
   if (!URL_) return;
+  const get = async action => (await fetch(`${URL_}?action=${action}&t=${Date.now()}`)).json();
   try {
-    const res = await fetch(`${URL_}?action=waste&t=${Date.now()}`);
-    const data = await res.json();
-    if (!data.waste) { renderStats('통계를 쓰려면 구글 시트의 Apps Script를 새 버전으로 다시 배포해 주세요.'); return; }
-    waste = data.waste.map(w => ({ ...w, date: normDate(w.date), added: normDate(w.added) }));
-    store.set('fridgeWaste', waste); renderStats();
+    const [w, e] = await Promise.all([get('waste'), get('eaten')]);
+    if (!w.waste || !e.eaten) { renderStats('통계를 쓰려면 구글 시트의 Apps Script를 새 버전으로 다시 배포해 주세요.'); return; }
+    waste = w.waste.map(x => ({ ...x, date: normDate(x.date), added: normDate(x.added) }));
+    eaten = e.eaten.map(x => ({ ...x, date: normDate(x.date), added: normDate(x.added) }));
+    store.set('fridgeWaste', waste); store.set('fridgeEaten', eaten); renderStats('');
   } catch { /* 저장된 기록을 그대로 보여 준다 */ }
 }
 $('statsBtn').onclick = () => {
