@@ -2,347 +2,280 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🍼 분유 기록</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="냉장고">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>🧊 우리집 냉장고</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #f5f5f3;
-    --surface: #ffffff;
-    --surface-muted: #f0efec;
-    --border: rgba(0,0,0,0.1);
-    --text: #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted: #898781;
-    --accent: #2a78d6;
-    --accent-bg: #e6f1fb;
-    --radius: 10px;
+    --bg:#f5f5f3; --surface:#fff; --muted-bg:#f0efec; --border:rgba(0,0,0,.1);
+    --text:#0b0b0b; --text2:#52514e; --text3:#898781;
+    --accent:#2a78d6; --accent-bg:#e6f1fb;
+    --red:#d63a2a; --red-bg:#fbeae7; --amber:#b86e00; --amber-bg:#fdf1dc; --green:#2f8a4d; --green-bg:#e4f4ea;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1a1a18;
-      --surface: #242422;
-      --surface-muted: #2c2c2a;
-      --border: rgba(255,255,255,0.1);
-      --text: #f0efe9;
-      --text-secondary: #b0afa8;
-      --text-muted: #6b6a66;
-      --accent: #4a90e2;
-      --accent-bg: #1a2d42;
+      --bg:#1a1a18; --surface:#242422; --muted-bg:#2c2c2a; --border:rgba(255,255,255,.1);
+      --text:#f0efe9; --text2:#b0afa8; --text3:#7b7a76;
+      --accent:#4a90e2; --accent-bg:#1a2d42;
+      --red:#ff7a6b; --red-bg:#3a1f1b; --amber:#f0b44c; --amber-bg:#3a2d12; --green:#6cc58a; --green-bg:#173222;
     }
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  .container { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-  .subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 1.5rem; }
-
-  /* 설정 배너 */
-  .setup-banner { background: #fef3cd; border: 1px solid #f0c940; border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: none; }
-  .setup-banner.visible { display: block; }
-  .setup-banner p { font-size: 13px; color: #7a5f00; margin-bottom: 8px; font-weight: 500; }
-  .setup-row { display: flex; gap: 8px; }
-  .setup-row input { flex: 1; padding: 8px 10px; border: 1px solid #f0c940; border-radius: 6px; font-size: 13px; background: #fff; color: #333; }
-  .setup-row button { padding: 8px 14px; background: #f0c940; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: #5a4500; white-space: nowrap; }
-
-  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  .card-label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 1rem; }
-
-  .input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; }
-  @media (max-width: 480px) { .input-grid { grid-template-columns: 1fr 1fr; } .input-grid .add-btn { grid-column: 1 / -1; } }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 11px; color: var(--text-muted); }
-  .field input { padding: 8px 10px; border: 0.5px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text); width: 100%; outline: none; }
-  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(42,120,214,0.15); }
-  .add-btn { padding: 9px 18px; background: var(--text); color: var(--surface); border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
-  .add-btn:hover { opacity: 0.8; }
-  .add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
-  .stat { background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
-  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
-  .stat-value { font-size: 20px; font-weight: 600; color: var(--text); }
-  .stat-unit { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
-
-  .tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--border); margin-bottom: 1.1rem; }
-  .tab { font-size: 13px; font-weight: 500; color: var(--text-muted); padding: 7px 13px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; transition: color .15s; }
-  .tab.active { color: var(--text); border-bottom-color: var(--text); }
-
-  .chart-wrap { position: relative; width: 100%; height: 250px; }
-  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
-  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; font-weight: 500; color: var(--text-muted); padding: 6px 8px; border-bottom: 0.5px solid var(--border); font-size: 12px; }
-  td { padding: 9px 8px; border-bottom: 0.5px solid var(--border); color: var(--text); }
-  tr:last-child td { border-bottom: none; }
-  .date-row td { font-size: 12px; font-weight: 500; color: var(--text-secondary); background: var(--surface-muted); padding: 5px 8px; }
-  .badge { display: inline-block; background: var(--accent-bg); color: var(--accent); font-size: 11px; font-weight: 500; border-radius: 99px; padding: 2px 8px; margin-left: 6px; }
-  .del-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 6px; line-height: 1; }
-  .del-btn:hover { color: #e24b4a; background: #fcebeb; }
-
-  .empty { text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
-  .syncing { font-size: 12px; color: var(--text-muted); text-align: right; margin-top: 6px; min-height: 18px; }
-  .syncing.error { color: #e24b4a; }
+  body { font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .container { max-width:680px; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top)) 1rem calc(3rem + env(safe-area-inset-bottom)); }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+  h1 { font-size:22px; font-weight:600; }
+  .icon-btn { background:none; border:none; font-size:22px; cursor:pointer; padding:4px 8px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:1rem; }
+  input, select { width:100%; font-size:17px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); }
+  .row { display:flex; gap:8px; margin-top:8px; }
+  button.primary { background:var(--accent); color:#fff; border:none; border-radius:10px; font-size:17px; padding:12px 18px; cursor:pointer; white-space:nowrap; }
+  button.primary:disabled { opacity:.5; }
+  .hint { font-size:13px; color:var(--text3); margin-top:8px; line-height:1.5; }
+  .preview { font-size:14px; color:var(--accent); margin-top:8px; min-height:20px; }
+  .tabs { display:flex; gap:6px; margin-bottom:.75rem; }
+  .tab { flex:1; padding:8px 0; border:1px solid var(--border); background:var(--surface); color:var(--text2); border-radius:999px; font-size:14px; cursor:pointer; }
+  .tab.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .alert { background:var(--red-bg); color:var(--red); border-radius:12px; padding:12px 14px; margin-bottom:1rem; font-size:15px; line-height:1.5; }
+  .item { display:flex; align-items:center; gap:10px; padding:12px 0; border-top:1px solid var(--border); }
+  .item:first-child { border-top:none; }
+  .info { flex:1; min-width:0; }
+  .name { font-size:17px; font-weight:500; }
+  .meta { font-size:13px; color:var(--text3); margin-top:2px; }
+  .dday { font-size:13px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--muted-bg); color:var(--text2); white-space:nowrap; }
+  .dday.red { background:var(--red-bg); color:var(--red); }
+  .dday.amber { background:var(--amber-bg); color:var(--amber); }
+  .dday.green { background:var(--green-bg); color:var(--green); }
+  .acts button { border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:8px; font-size:13px; padding:6px 8px; cursor:pointer; margin-left:4px; }
+  .empty { text-align:center; color:var(--text3); padding:2rem 0; }
+  .status { font-size:12px; color:var(--text3); text-align:center; margin-top:1rem; }
+  .setup h2 { font-size:17px; margin-bottom:8px; }
+  .setup ol { padding-left:1.2rem; font-size:14px; color:var(--text2); line-height:1.7; margin-bottom:10px; }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>🍼 분유 기록</h1>
-  <p class="subtitle">날짜와 시각별로 먹인 분유량을 기록하고 변화를 확인하세요</p>
+  <header>
+    <h1>🧊 우리집 냉장고</h1>
+    <button class="icon-btn" id="settingsBtn" aria-label="설정">⚙️</button>
+  </header>
 
-  <div class="setup-banner" id="setupBanner">
-    <p>⚙️ Google Sheets 연동 URL을 입력해 주세요 (한 번만 설정하면 모든 기기에서 공유돼요)</p>
-    <div class="setup-row">
-      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
-      <button onclick="saveScriptUrl()">저장</button>
+  <!-- 설정 -->
+  <div class="card setup" id="setup" hidden>
+    <h2>처음 한 번만 설정해요</h2>
+    <ol>
+      <li>구글 시트를 새로 만들고 <b>확장 프로그램 → Apps Script</b>를 열어요.</li>
+      <li><code>apps-script.gs</code> 내용을 붙여넣고 <b>배포 → 웹 앱</b> (액세스: 모든 사용자)으로 배포해요.</li>
+      <li>나온 웹 앱 URL을 아래에 붙여넣어요.</li>
+    </ol>
+    <input id="urlInput" placeholder="웹 앱 URL (https://script.google.com/...)" inputmode="url">
+    <input id="whoInput" placeholder="내 이름 (예: 남편, 아내)" style="margin-top:8px">
+    <div class="row">
+      <button class="primary" id="saveSetup" style="flex:1">저장</button>
+      <button class="primary" id="shareBtn" style="background:var(--green)">아내에게 링크 복사</button>
     </div>
+    <p class="hint">아내분께는 "링크 복사" 버튼으로 만든 링크를 보내 주세요. 링크를 열면 URL이 자동으로 설정돼요. 이름만 따로 입력하면 돼요.</p>
   </div>
 
+  <!-- 입력 -->
   <div class="card">
-    <div class="card-label">기록 추가</div>
-    <div class="input-grid">
-      <div class="field"><label>날짜</label><input type="date" id="inputDate"></div>
-      <div class="field"><label>시각</label><input type="time" id="inputTime"></div>
-      <div class="field"><label>양 (ml)</label><input type="number" id="inputAmount" min="0" max="300" step="5" placeholder="예: 80"></div>
-      <button class="add-btn" id="addBtn" onclick="addEntry()">추가</button>
+    <input id="quick" placeholder="예: 우유 2개 10/25" autocomplete="off" enterkeyhint="done">
+    <div class="preview" id="preview"></div>
+    <div class="row">
+      <select id="loc" style="flex:1">
+        <option>냉장</option><option>냉동</option><option>실온</option>
+      </select>
+      <button class="primary" id="addBtn">추가</button>
     </div>
-    <div class="syncing" id="syncMsg"></div>
+    <p class="hint">🎤 키보드의 마이크로 말해도 돼요. "두부 1모 3일 후", "삼겹살 냉동 한 팩"처럼 적으면 알아서 나눠요.</p>
   </div>
 
-  <div class="stats-row">
-    <div class="stat"><div class="stat-label">오늘 총량</div><div class="stat-value" id="statToday">0 <span class="stat-unit">ml</span></div></div>
-    <div class="stat"><div class="stat-label">오늘 횟수</div><div class="stat-value" id="statCount">0 <span class="stat-unit">회</span></div></div>
-    <div class="stat"><div class="stat-label">평균 (7일)</div><div class="stat-value" id="statAvg">- <span class="stat-unit">ml</span></div></div>
+  <div class="alert" id="alert" hidden></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-f="전체">전체</button>
+    <button class="tab" data-f="냉장">냉장</button>
+    <button class="tab" data-f="냉동">냉동</button>
+    <button class="tab" data-f="실온">실온</button>
   </div>
 
-  <div class="card">
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('chart', this)">일별 누적</button>
-      <button class="tab" onclick="switchTab('perFeed', this)">횟수별 추이</button>
-      <button class="tab" onclick="switchTab('log', this)">기록 목록</button>
-    </div>
-    <div id="tabChart">
-      <div class="chart-wrap"><canvas id="dailyChart" role="img" aria-label="일별 누적 분유량 막대 차트">일별 분유 누적 총량</canvas></div>
-      <div class="legend" id="chartLegend"></div>
-    </div>
-    <div id="tabPerFeed" style="display:none">
-      <div class="chart-wrap"><canvas id="feedChart" role="img" aria-label="수유 횟수별 추이 꺾은선 차트">수유 기록 추이</canvas></div>
-    </div>
-    <div id="tabLog" style="display:none">
-      <div id="logContent"><div class="empty">아직 기록이 없습니다.</div></div>
-    </div>
-  </div>
+  <div class="card" id="list"></div>
+  <div class="status" id="status"></div>
 </div>
 
 <script>
-const FEED_COLORS = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#eb6834','#e87ba4','#008300'];
-let entries = [];
-let dailyChart = null, feedChart = null, activeTab = 'chart';
-let SCRIPT_URL = localStorage.getItem('formulaScriptUrl') || '';
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
 
-function today() { return new Date().toISOString().slice(0,10); }
-function nowTime() { const d=new Date(); return d.toTimeString().slice(0,5); }
+// 공유 링크(#u=...)로 들어오면 URL 자동 설정
+(function () {
+  const m = location.hash.match(/u=([^&]+)/);
+  if (m) { store.set('fridgeUrl', decodeURIComponent(m[1])); history.replaceState(null, '', location.pathname); }
+})();
 
-document.getElementById('inputDate').value = today();
-document.getElementById('inputTime').value = nowTime();
+let URL_ = store.get('fridgeUrl', '');
+let WHO = store.get('fridgeWho', '');
+let items = store.get('fridgeItems', []);
+let filter = '전체';
 
-// 설정 배너
-function checkSetup() {
-  document.getElementById('setupBanner').classList.toggle('visible', !SCRIPT_URL);
-}
-function saveScriptUrl() {
-  const url = document.getElementById('scriptUrlInput').value.trim();
-  if (!url.startsWith('https://script.google.com')) { alert('올바른 URL이 아닙니다.'); return; }
-  SCRIPT_URL = url;
-  localStorage.setItem('formulaScriptUrl', url);
-  document.getElementById('setupBanner').classList.remove('visible');
-  loadEntries();
-}
+/* ---------- 문장 분해 ---------- */
+const pad = n => String(n).padStart(2, '0');
+const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
-function setSyncMsg(msg, isError=false) {
-  const el = document.getElementById('syncMsg');
-  el.textContent = msg;
-  el.className = 'syncing' + (isError ? ' error' : '');
-}
+function parseQuick(text, now = today()) {
+  let s = text.trim(), expiry = '', loc = '', qty = '';
 
-async function loadEntries() {
-  if (!SCRIPT_URL) { checkSetup(); return; }
-  setSyncMsg('불러오는 중...');
-  try {
-    const res = await fetch(`${SCRIPT_URL}?action=getAll`);
-    const data = await res.json();
-    entries = (data.entries || []).map(e => ({ ...e, amount: Number(e.amount) }));
-    entries.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
-    setSyncMsg('');
-    render();
-  } catch(e) {
-    setSyncMsg('불러오기 실패. URL을 확인해 주세요.', true);
+  // 위치
+  const lm = s.match(/냉장|냉동|실온/);
+  if (lm) { loc = lm[0]; s = s.replace(lm[0], ' '); }
+
+  // N일/주/달 후, 내일, 모레
+  let m;
+  const add = n => { const d = new Date(now); d.setDate(d.getDate() + n); return fmt(d); };
+  if ((m = s.match(/(\d+)\s*일\s*(후|뒤)/))) { expiry = add(+m[1]); s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/(\d+)\s*주\s*(후|뒤)/))) { expiry = add(+m[1] * 7); s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/(\d+)\s*(달|개월)\s*(후|뒤)/))) {
+    const d = new Date(now); d.setMonth(d.getMonth() + +m[1]); expiry = fmt(d); s = s.replace(m[0], ' ');
   }
-}
-
-async function addEntry() {
-  const date = document.getElementById('inputDate').value;
-  const time = document.getElementById('inputTime').value;
-  const amount = parseInt(document.getElementById('inputAmount').value);
-  if (!date || !time || !amount || amount <= 0) { alert('날짜, 시각, 양을 모두 입력해 주세요.'); return; }
-  const entry = { id: Date.now(), date, time, amount };
-  document.getElementById('addBtn').disabled = true;
-  setSyncMsg('저장 중...');
-  try {
-    await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify({ action:'add', ...entry }) });
-    entries.push(entry);
-    entries.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
-    document.getElementById('inputAmount').value = '';
-    document.getElementById('inputTime').value = nowTime();
-    setSyncMsg('저장됨 ✓');
-    setTimeout(() => setSyncMsg(''), 2000);
-    render();
-  } catch(e) {
-    setSyncMsg('저장 실패. 다시 시도해 주세요.', true);
+  else if ((m = s.match(/모레/))) { expiry = add(2); s = s.replace(m[0], ' '); }
+  else if ((m = s.match(/내일/))) { expiry = add(1); s = s.replace(m[0], ' '); }
+  // 10월 25일 / 10/25 / 10.25
+  else if ((m = s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일?/)) || (m = s.match(/(\d{1,2})\s*[\/.]\s*(\d{1,2})/))) {
+    let y = now.getFullYear();
+    let d = new Date(y, +m[1] - 1, +m[2]);
+    if (d < now) d = new Date(y + 1, +m[1] - 1, +m[2]);
+    expiry = fmt(d); s = s.replace(m[0], ' ');
   }
-  document.getElementById('addBtn').disabled = false;
+  s = s.replace(/(까지|유통기한|소비기한)/g, ' ');
+
+  // 수량: 숫자 + 단위, 또는 한글 수사 + 단위
+  const unit = '개|팩|봉지|봉|모|병|통|캔|판|단|줄|마리|근|kg|g|ml|L|리터|장|조각|포기|송이|상자|박스';
+  const kor = { '한': 1, '두': 2, '세': 3, '네': 4, '다섯': 5, '여섯': 6, '일곱': 7, '여덟': 8, '아홉': 9, '열': 10 };
+  if ((m = s.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${unit})`)))) { qty = m[1] + m[2]; s = s.replace(m[0], ' '); }
+  else if ((m = s.match(new RegExp(`(${Object.keys(kor).join('|')})\\s*(${unit})`)))) { qty = kor[m[1]] + m[2]; s = s.replace(m[0], ' '); }
+
+  const name = s.replace(/\s+/g, ' ').trim();
+  return { name, qty, loc, expiry };
 }
 
-async function deleteEntry(id) {
-  if (!confirm('이 기록을 삭제할까요?')) return;
-  setSyncMsg('삭제 중...');
-  try {
-    await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify({ action:'delete', id }) });
-    entries = entries.filter(e => String(e.id) !== String(id));
-    setSyncMsg('삭제됨 ✓');
-    setTimeout(() => setSyncMsg(''), 2000);
-    render();
-  } catch(e) {
-    setSyncMsg('삭제 실패.', true);
-  }
+/* ---------- 표시 ---------- */
+function daysLeft(expiry) {
+  if (!expiry) return null;
+  const [y, mo, d] = expiry.split('-').map(Number);
+  return Math.round((new Date(y, mo - 1, d) - today()) / 86400000);
 }
-
-function getDailyTotals() {
-  const map = {};
-  entries.forEach(e => {
-    if (!map[e.date]) map[e.date] = { total:0, count:0, feeds:[] };
-    map[e.date].total += e.amount;
-    map[e.date].count += 1;
-    map[e.date].feeds.push(e.amount);
-  });
-  return map;
+function ddayInfo(expiry) {
+  const n = daysLeft(expiry);
+  if (n === null) return { text: '기한 없음', cls: '' };
+  if (n < 0) return { text: `${-n}일 지남`, cls: 'red' };
+  if (n === 0) return { text: 'D-day', cls: 'red' };
+  return { text: `D-${n}`, cls: n <= 3 ? 'red' : n <= 7 ? 'amber' : 'green' };
 }
-
-function switchTab(tab, el) {
-  activeTab = tab;
-  document.getElementById('tabChart').style.display = tab==='chart' ? '' : 'none';
-  document.getElementById('tabPerFeed').style.display = tab==='perFeed' ? '' : 'none';
-  document.getElementById('tabLog').style.display = tab==='log' ? '' : 'none';
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  if (tab==='chart') renderDailyChart();
-  else if (tab==='perFeed') renderFeedChart();
-  else renderLog();
-}
-
-function renderStats() {
-  const map = getDailyTotals();
-  const td = today();
-  const todayData = map[td] || { total:0, count:0 };
-  document.getElementById('statToday').innerHTML = `${todayData.total} <span class="stat-unit">ml</span>`;
-  document.getElementById('statCount').innerHTML = `${todayData.count} <span class="stat-unit">회</span>`;
-  const dates = Object.keys(map).sort().slice(-7);
-  const avg = dates.length ? Math.round(dates.reduce((s,d)=>s+map[d].total,0)/dates.length) : null;
-  document.getElementById('statAvg').innerHTML = avg!=null ? `${avg} <span class="stat-unit">ml</span>` : `- <span class="stat-unit">ml</span>`;
-}
-
-function renderDailyChart() {
-  const map = getDailyTotals();
-  const dates = Object.keys(map).sort().slice(-14);
-  const maxFeeds = dates.reduce((m,d) => Math.max(m, map[d].feeds.length), 0);
-  const datasets = Array.from({length: maxFeeds}, (_, i) => ({
-    label: `${i+1}회`,
-    data: dates.map(d => map[d].feeds[i] ?? null),
-    backgroundColor: FEED_COLORS[i % FEED_COLORS.length],
-    borderRadius: i===maxFeeds-1 ? {topLeft:4,topRight:4,bottomLeft:0,bottomRight:0} : 0,
-    borderSkipped: false,
-    stack: 'stack0',
-  }));
-  const labels = dates.map(d => { const p=d.split('-'); return `${p[1]}/${p[2]}`; });
-  const ctx = document.getElementById('dailyChart').getContext('2d');
-  if (dailyChart) dailyChart.destroy();
-  dailyChart = new Chart(ctx, {
-    type:'bar', data:{labels, datasets},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{
-          title: items => dates[items[0].dataIndex].replace(/-/g,'/'),
-          label: c => ` ${c.dataset.label}: ${c.raw} ml`,
-          footer: items => `합계: ${items.reduce((s,i)=>s+(i.raw||0),0)} ml`
-        }}
-      },
-      scales:{
-        x:{stacked:true, grid:{display:false}, ticks:{color:'#898781', font:{size:11}}},
-        y:{stacked:true, grid:{color:'rgba(128,128,128,0.15)'}, ticks:{color:'#898781', font:{size:11}, callback:v=>v+'ml'}, beginAtZero:true}
-      }
-    }
-  });
-  document.getElementById('chartLegend').innerHTML = datasets.map((ds,i) =>
-    `<div class="legend-item"><span class="legend-dot" style="background:${FEED_COLORS[i%FEED_COLORS.length]}"></span>${ds.label}</div>`
-  ).join('');
-}
-
-function renderFeedChart() {
-  const recent = entries.slice(-30);
-  const ctx = document.getElementById('feedChart').getContext('2d');
-  if (feedChart) feedChart.destroy();
-  feedChart = new Chart(ctx, {
-    type:'line',
-    data:{
-      labels: recent.map(e=>`${e.date.slice(5)} ${e.time}`),
-      datasets:[{
-        label:'수유량 (ml)', data:recent.map(e=>e.amount),
-        borderColor:'#1baf7a', backgroundColor:'rgba(27,175,122,0.08)',
-        borderWidth:2, pointRadius:4, pointBackgroundColor:'#1baf7a', fill:true, tension:0.3,
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.raw} ml`}}},
-      scales:{
-        x:{grid:{display:false}, ticks:{color:'#898781', font:{size:10}, maxRotation:45, autoSkip:true, maxTicksLimit:10}},
-        y:{grid:{color:'rgba(128,128,128,0.15)'}, ticks:{color:'#898781', font:{size:11}, callback:v=>v+'ml'}, beginAtZero:true}
-      }
-    }
-  });
-}
-
-function renderLog() {
-  const map = getDailyTotals();
-  if (!entries.length) { document.getElementById('logContent').innerHTML='<div class="empty">아직 기록이 없습니다.<br>위에서 분유량을 추가해 보세요.</div>'; return; }
-  const byDate = {};
-  entries.forEach(e => { if(!byDate[e.date]) byDate[e.date]=[]; byDate[e.date].push(e); });
-  const dates = Object.keys(byDate).sort().reverse();
-  let html = '<table><thead><tr><th>시각</th><th>양</th><th></th></tr></thead><tbody>';
-  dates.forEach(d => {
-    const p=d.split('-');
-    html += `<tr class="date-row"><td colspan="3">${p[0]}년 ${p[1]}월 ${p[2]}일 <span class="badge">합계 ${map[d].total}ml</span></td></tr>`;
-    byDate[d].slice().reverse().forEach(e => {
-      html += `<tr><td>${e.time}</td><td>${e.amount} ml</td><td><button class="del-btn" onclick="deleteEntry(${e.id})" title="삭제">✕</button></td></tr>`;
-    });
-  });
-  html += '</tbody></table>';
-  document.getElementById('logContent').innerHTML = html;
-}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function render() {
-  renderStats();
-  if (activeTab==='chart') renderDailyChart();
-  else if (activeTab==='perFeed') renderFeedChart();
-  else renderLog();
+  const sorted = [...items].sort((a, b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'));
+  const shown = sorted.filter(i => filter === '전체' || i.loc === filter);
+
+  const urgent = sorted.filter(i => { const n = daysLeft(i.expiry); return n !== null && n <= 3; });
+  const al = $('alert');
+  if (urgent.length) {
+    al.hidden = false;
+    al.innerHTML = `⚠️ 빨리 먹어야 해요 (${urgent.length}개)<br>` + urgent.map(i => `${esc(i.name)} <b>${ddayInfo(i.expiry).text}</b>`).join(' · ');
+  } else al.hidden = true;
+
+  $('list').innerHTML = shown.length ? shown.map(i => {
+    const d = ddayInfo(i.expiry);
+    const meta = [i.loc, i.qty, i.by && `${i.by} 등록`].filter(Boolean).map(esc).join(' · ');
+    return `<div class="item">
+      <div class="info"><div class="name">${esc(i.name)}</div><div class="meta">${meta}</div></div>
+      <span class="dday ${d.cls}">${d.text}</span>
+      <span class="acts"><button data-id="${esc(i.id)}" data-s="먹음">먹었어요</button><button data-id="${esc(i.id)}" data-s="버림">버렸어요</button></span>
+    </div>`;
+  }).join('') : '<div class="empty">비어 있어요 🙌</div>';
 }
 
-checkSetup();
-loadEntries();
+/* ---------- 서버 ---------- */
+function setStatus(t) { $('status').textContent = t; }
+
+async function load() {
+  if (!URL_) return;
+  try {
+    const res = await fetch(`${URL_}?t=${Date.now()}`);
+    const data = await res.json();
+    items = data.items; store.set('fridgeItems', items); render();
+    setStatus('동기화됨 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+  } catch { setStatus('⚠️ 서버에 연결하지 못했어요. 저장된 목록을 보여드려요.'); }
+}
+async function send(payload) {
+  if (!URL_) return;
+  try { await fetch(URL_, { method: 'POST', body: JSON.stringify(payload) }); }
+  catch { setStatus('⚠️ 서버 저장 실패. 새로고침하면 사라질 수 있어요.'); }
+}
+
+/* ---------- 이벤트 ---------- */
+$('quick').addEventListener('input', () => {
+  const p = parseQuick($('quick').value);
+  $('preview').textContent = p.name
+    ? `→ ${p.name}${p.qty ? ' · ' + p.qty : ''}${p.expiry ? ' · ~' + p.expiry : ' · 기한 없음'}` : '';
+  if (p.loc) $('loc').value = p.loc;
+});
+
+async function addItem() {
+  if (!URL_) { $('setup').hidden = false; return; }
+  const p = parseQuick($('quick').value);
+  if (!p.name) return;
+  const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name: p.name, qty: p.qty, loc: p.loc || $('loc').value, expiry: p.expiry, by: WHO };
+  items.push(item); store.set('fridgeItems', items); render();
+  $('quick').value = ''; $('preview').textContent = '';
+  await send({ action: 'add', ...item });
+}
+$('addBtn').onclick = addItem;
+$('quick').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+
+$('list').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-id]'); if (!b) return;
+  items = items.filter(i => i.id !== b.dataset.id); store.set('fridgeItems', items); render();
+  await send({ action: 'done', id: b.dataset.id, status: b.dataset.s });
+});
+
+$('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  filter = t.dataset.f;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  render();
+});
+
+$('settingsBtn').onclick = () => { $('setup').hidden = !$('setup').hidden; $('urlInput').value = URL_; $('whoInput').value = WHO; };
+$('saveSetup').onclick = () => {
+  URL_ = $('urlInput').value.trim(); WHO = $('whoInput').value.trim();
+  store.set('fridgeUrl', URL_); store.set('fridgeWho', WHO);
+  $('setup').hidden = true; load();
+};
+$('shareBtn').onclick = async () => {
+  const url = $('urlInput').value.trim() || URL_;
+  if (!url) return;
+  const link = `${location.origin}${location.pathname}#u=${encodeURIComponent(url)}`;
+  try { await navigator.clipboard.writeText(link); setStatus('링크를 복사했어요. 아내에게 보내 주세요.'); }
+  catch { prompt('이 링크를 아내에게 보내 주세요', link); }
+};
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+
+/* ---------- 시작 ---------- */
+if (!URL_ || !WHO) {
+  $('setup').hidden = false; $('urlInput').value = URL_; $('whoInput').value = WHO;
+}
+render(); load();
 </script>
 </body>
 </html>
