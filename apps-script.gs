@@ -27,6 +27,13 @@ function doGet(e) {
     }));
     return out_({ waste });
   }
+  // 먹은 음식 기록 (자주 먹는 재료 통계용)
+  if (e && e.parameter && e.parameter.action === 'eaten') {
+    const eaten = rows.filter(r => r[7] === '먹음').map(r => ({
+      name: r[1], loc: r[3], by: r[5], added: ymd_(r[6]), date: r[8] === '' ? '' : ymd_(r[8]),
+    }));
+    return out_({ eaten });
+  }
   const items = rows.filter(r => r[7] === '보관중').map(r => ({
     id: r[0], name: r[1], qty: r[2], loc: r[3],
     expiry: r[4] instanceof Date ? Utilities.formatDate(r[4], 'Asia/Seoul', 'yyyy-MM-dd') : String(r[4]),
