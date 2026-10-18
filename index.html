@@ -44,7 +44,7 @@
   .seg.loc button.on[data-v="냉동"] { background:#3aa6c9; color:#fff; }
   .lbl { font-size:13px; color:var(--text3); margin-top:12px; }
   .date-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
-  .date-row input { width:80px; text-align:center; }
+  .date-row input { width:68px; text-align:center; padding:12px 4px; }
   .date-row span { color:var(--text2); }
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:10; }
   .overlay[hidden] { display:none; }
@@ -128,6 +128,7 @@
       <button type="button" data-v="none">날짜 없음</button>
     </div>
     <div class="date-row" id="dateRow">
+      <input id="year" type="number" inputmode="numeric" placeholder="연도" style="width:92px"><span>년</span>
       <input id="mon" type="number" inputmode="numeric" min="1" max="12" placeholder="월"><span>월</span>
       <input id="day" type="number" inputmode="numeric" min="1" max="31" placeholder="일"><span>일</span>
     </div>
@@ -203,10 +204,18 @@ const pad = n => String(n).padStart(2, '0');
 const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
-// 월/일 → yyyy-MM-dd. 연도는 자동: 유통기한은 오늘 이후 가장 가까운 날, 구입·제조일은 오늘 이전 가장 가까운 날.
-function buildDate(mon, day, kind, now = today()) {
+// 연/월/일 → yyyy-MM-dd. 연도를 비우면 자동: 유통기한은 오늘 이후 가장 가까운 날, 구입·제조일은 오늘 이전 가장 가까운 날.
+// 연도는 "27"처럼 두 자리로 적어도 2027로 본다.
+function buildDate(year, mon, day, kind, now = today()) {
   const m = +mon, d = +day, y = now.getFullYear();
   if (!m || !d) return { date: '', err: '' };
+  if (year !== '' && year != null) {
+    let yy = +year; if (yy < 100) yy += 2000;
+    if (!(yy >= 2000 && yy <= 2100)) return { date: '', err: '연도를 확인해 주세요' };
+    const dt = new Date(yy, m - 1, d);
+    if (m < 1 || m > 12 || dt.getMonth() !== m - 1 || dt.getDate() !== d) return { date: '', err: '없는 날짜예요' };
+    return { date: fmt(dt), err: '' };
+  }
   const make = yy => new Date(yy, m - 1, d);
   const ok = dt => dt.getMonth() === m - 1 && dt.getDate() === d;
   let dt = make(y);
@@ -310,7 +319,7 @@ function setSeg(id, val) {
 }
 function formState() {
   const name = $('name').value.trim();
-  const { date, err } = kind === 'none' ? { date: '', err: '' } : buildDate($('mon').value, $('day').value, kind);
+  const { date, err } = kind === 'none' ? { date: '', err: '' } : buildDate($('year').value, $('mon').value, $('day').value, kind);
   return { name, qty: $('qty').value.trim(), date, err };
 }
 function updatePreview() {
@@ -340,7 +349,7 @@ $('kindSeg').addEventListener('click', e => {
   }
   updatePreview();
 });
-['name', 'qty', 'mon', 'day'].forEach(id => $(id).addEventListener('input', updatePreview));
+['name', 'qty', 'year', 'mon', 'day'].forEach(id => $(id).addEventListener('input', updatePreview));
 setSeg('locSeg', loc); updatePreview();
 
 async function addItem() {
@@ -352,7 +361,7 @@ async function addItem() {
     expiry: kind === 'expiry' ? f.date : '',
     added: kind === 'made' && f.date ? f.date : fmt(today()) };
   items.push(item); store.set('fridgeItems', items); render();
-  $('name').value = ''; $('qty').value = ''; $('mon').value = ''; $('day').value = '';
+  $('name').value = ''; $('qty').value = ''; $('year').value = ''; $('mon').value = ''; $('day').value = '';
   updatePreview();
   await send({ action: 'add', ...item });
 }
