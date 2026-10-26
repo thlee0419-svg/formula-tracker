@@ -47,15 +47,24 @@ function doPost(e) {
   const s = sheet_();
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
+    const ids = () => s.getRange(1, 1, s.getLastRow(), 1).getValues().flat();
     if (d.action === 'add') {
       s.appendRow([d.id, d.name, d.qty, d.loc, d.expiry, d.by, d.added || new Date(), '보관중']);
     } else if (d.action === 'done') { // status: 먹음 | 버림
-      const ids = s.getRange(1, 1, s.getLastRow(), 1).getValues().flat();
-      const i = ids.indexOf(d.id);
+      const i = ids().indexOf(d.id);
       if (i > 0) {
         // 상태, 처리일, 버린양(g)을 한 번에 기록
         s.getRange(i + 1, 8, 1, 3).setValues([[d.status, d.date || new Date(), d.grams === '' || d.grams == null ? '' : d.grams]]);
       }
+    } else if (d.action === 'update') { // 잘못 입력한 재료 수정
+      const i = ids().indexOf(d.id);
+      if (i > 0) {
+        s.getRange(i + 1, 2, 1, 4).setValues([[d.name, d.qty, d.loc, d.expiry]]);
+        s.getRange(i + 1, 7).setValue(d.added);
+      }
+    } else if (d.action === 'remove') { // 통계에 남기지 않고 행 삭제
+      const i = ids().indexOf(d.id);
+      if (i > 0) s.deleteRow(i + 1);
     }
   } finally { lock.release(); }
   return out_({ ok: true });

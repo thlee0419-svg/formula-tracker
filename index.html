@@ -48,7 +48,7 @@
   .date-row span { color:var(--text2); }
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:10; }
   .overlay[hidden] { display:none; }
-  .sheet { background:var(--surface); width:100%; max-width:680px; border-radius:16px 16px 0 0; padding:1.2rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
+  .sheet { max-height:92vh; overflow-y:auto; background:var(--surface); width:100%; max-width:680px; border-radius:16px 16px 0 0; padding:1.2rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
   .sheet h3 { font-size:18px; margin-bottom:4px; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
   .chip { border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:999px; padding:8px 14px; font-size:15px; cursor:pointer; }
@@ -67,7 +67,9 @@
   .alert { background:var(--red-bg); color:var(--red); border-radius:12px; padding:12px 14px; margin-bottom:1rem; font-size:15px; line-height:1.5; }
   .item { display:flex; align-items:center; gap:10px; padding:12px 0; border-top:1px solid var(--border); }
   .item:first-child { border-top:none; }
-  .info { flex:1; min-width:0; }
+  .info { flex:1; min-width:0; cursor:pointer; }
+  .info .name .pen { font-size:12px; opacity:.45; margin-left:4px; }
+  .danger { background:none; border:1px solid var(--red); color:var(--red); border-radius:10px; font-size:15px; padding:10px 14px; cursor:pointer; }
   .name { font-size:17px; font-weight:500; }
   .meta { font-size:13px; color:var(--text3); margin-top:2px; }
   .dday { font-size:13px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--muted-bg); color:var(--text2); white-space:nowrap; }
@@ -181,6 +183,39 @@
   </div>
 </div>
 
+<!-- 재료 수정 / 삭제 -->
+<div class="overlay" id="editModal" hidden>
+  <div class="sheet">
+    <h3>재료 수정</h3>
+    <input id="eName" placeholder="재료 이름" autocomplete="off" style="margin-top:10px">
+    <input id="eQty" placeholder="수량 (선택)" autocomplete="off" style="margin-top:8px">
+    <div class="lbl">보관 위치</div>
+    <div class="seg loc" id="eLocSeg" style="margin-top:4px">
+      <button type="button" data-v="냉장">🧊 냉장</button>
+      <button type="button" data-v="냉동">❄️ 냉동</button>
+    </div>
+    <div class="lbl">유통기한 (없으면 비워 두세요)</div>
+    <div class="date-row">
+      <input id="exYear" type="number" inputmode="numeric" placeholder="연도" style="width:92px"><span>년</span>
+      <input id="exMon" type="number" inputmode="numeric" placeholder="월"><span>월</span>
+      <input id="exDay" type="number" inputmode="numeric" placeholder="일"><span>일</span>
+    </div>
+    <div class="lbl">구입·제조일</div>
+    <div class="date-row">
+      <input id="mdYear" type="number" inputmode="numeric" placeholder="연도" style="width:92px"><span>년</span>
+      <input id="mdMon" type="number" inputmode="numeric" placeholder="월"><span>월</span>
+      <input id="mdDay" type="number" inputmode="numeric" placeholder="일"><span>일</span>
+    </div>
+    <div class="preview" id="editErr" style="color:var(--red)"></div>
+    <button class="primary" id="editSave" style="width:100%">저장</button>
+    <div class="row" style="justify-content:space-between;margin-top:0">
+      <button class="danger" id="editDelete" style="margin-top:8px">🗑 이 재료 삭제</button>
+      <button class="ghost" id="editCancel">취소</button>
+    </div>
+    <div class="hint" style="margin-top:0">삭제는 잘못 입력했을 때 쓰세요. 통계에 남지 않아요. 다 먹었거나 버렸다면 목록의 "먹었어요/버렸어요"를 눌러 주세요.</div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const store = {
@@ -282,7 +317,7 @@ function render() {
     const d = ddayInfo(i);
     const meta = [i.loc, i.qty, i.by && `${i.by} 등록`].filter(Boolean).map(esc).join(' · ');
     return `<div class="item${d.cls === 'red' ? ' red' : ''}">
-      <div class="info"><div class="name">${esc(i.name)}</div><div class="meta">${meta}</div></div>
+      <div class="info" data-edit="${esc(i.id)}"><div class="name">${esc(i.name)}<span class="pen">✏️</span></div><div class="meta">${meta}</div></div>
       <span class="dday ${d.cls}">${d.text}</span>
       <span class="acts"><button data-id="${esc(i.id)}" data-s="먹음">먹었어요</button><button data-id="${esc(i.id)}" data-s="버림">버렸어요</button></span>
     </div>`;
@@ -409,7 +444,53 @@ $('wasteUnknown').onclick = () => { const id = pendingId; closeWaste(); finishIt
 $('wasteCancel').onclick = closeWaste;
 $('wasteModal').addEventListener('click', e => { if (e.target === $('wasteModal')) closeWaste(); });
 
+/* ---------- 수정 / 삭제 ---------- */
+let editId = null, eLoc = '냉장';
+function fillDate(p, str) {
+  const [y, m, d] = str ? str.split('-').map(Number) : ['', '', ''];
+  $(p + 'Year').value = y; $(p + 'Mon').value = m; $(p + 'Day').value = d;
+}
+// 칸을 모두 비우면 날짜 없음. 일부만 채우면 오류.
+function readDate(p, kind) {
+  const y = $(p + 'Year').value, m = $(p + 'Mon').value, d = $(p + 'Day').value;
+  if (!y && !m && !d) return { date: '', err: '' };
+  if (!m || !d) return { date: '', err: '월과 일을 모두 적어 주세요' };
+  return buildDate(y, m, d, kind);
+}
+function openEdit(id) {
+  const it = items.find(x => x.id === id); if (!it) return;
+  editId = id; eLoc = it.loc; setSeg('eLocSeg', eLoc);
+  $('eName').value = it.name; $('eQty').value = it.qty || '';
+  fillDate('ex', it.expiry); fillDate('md', it.added);
+  $('editErr').textContent = ''; $('editModal').hidden = false;
+}
+function closeEdit() { $('editModal').hidden = true; editId = null; }
+$('eLocSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  eLoc = b.dataset.v; setSeg('eLocSeg', eLoc);
+});
+$('editSave').onclick = async () => {
+  const it = items.find(x => x.id === editId); if (!it) return closeEdit();
+  const name = $('eName').value.trim();
+  const ex = readDate('ex', 'expiry'), md = readDate('md', 'made');
+  const err = !name ? '이름을 적어 주세요' : ex.err || md.err;
+  if (err) { $('editErr').textContent = '⚠️ ' + err; return; }
+  Object.assign(it, { name, qty: $('eQty').value.trim(), loc: eLoc, expiry: ex.date, added: md.date || it.added || fmt(today()) });
+  store.set('fridgeItems', items); render(); closeEdit();
+  await send({ action: 'update', id: it.id, name: it.name, qty: it.qty, loc: it.loc, expiry: it.expiry, added: it.added });
+};
+$('editDelete').onclick = async () => {
+  const it = items.find(x => x.id === editId); if (!it) return closeEdit();
+  if (!confirm(`"${it.name}"을(를) 삭제할까요?\n통계에도 남지 않아요.`)) return;
+  items = items.filter(x => x.id !== it.id); store.set('fridgeItems', items); render(); closeEdit();
+  await send({ action: 'remove', id: it.id });
+};
+$('editCancel').onclick = closeEdit;
+$('editModal').addEventListener('click', e => { if (e.target === $('editModal')) closeEdit(); });
+
 $('list').addEventListener('click', e => {
+  const info = e.target.closest('.info[data-edit]');
+  if (info) { openEdit(info.dataset.edit); return; }
   const b = e.target.closest('button[data-id]'); if (!b) return;
   if (b.dataset.s === '버림') openWaste(b.dataset.id);
   else finishItem(b.dataset.id, '먹음', null);
