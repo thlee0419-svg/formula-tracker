@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>🏫 우리 반 담임 플랫폼</title>
+<meta name="theme-color" content="#1a1a18">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f5f5f3; --surface:#fff; --muted-bg:#f0efec; --border:rgba(0,0,0,.1);
+    --text:#0b0b0b; --text2:#52514e; --text3:#898781; --accent:#2a78d6;
+    --good:#2e9d5b; --mid:#d9a21b; --bad:#d93b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1a1a18; --surface:#242422; --muted-bg:#2c2c2a; --border:rgba(255,255,255,.1);
+      --text:#f0efe9; --text2:#b0afa8; --text3:#85847f; --accent:#4a90e2; --good:#4cc47f; --mid:#e8b84a; --bad:#ff6b6b; }
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .container { max-width:960px; margin:0 auto; padding:1.25rem 1rem 4rem; }
+  h1 { font-size:21px; font-weight:600; }
+  h2 { font-size:15px; font-weight:600; margin-bottom:10px; }
+  .sub { font-size:12px; color:var(--text3); margin:2px 0 12px; }
+  .sync { font-size:12px; color:var(--text3); } .sync.err { color:var(--bad); }
+  nav { display:flex; gap:6px; overflow-x:auto; margin-bottom:14px; padding-bottom:2px; }
+  nav button { flex:1; min-width:78px; padding:10px 8px; border:.5px solid var(--border); background:var(--surface); color:var(--text2); border-radius:10px; font-size:14px; cursor:pointer; white-space:nowrap; }
+  nav button.on { background:var(--text); color:var(--surface); font-weight:600; }
+  .card { background:var(--surface); border:.5px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+  .row > * { flex:0 1 auto; } .row > .grow { flex:1 1 140px; }
+  input, select, textarea { width:100%; padding:8px 10px; border:.5px solid var(--border); border-radius:8px; font:inherit; font-size:14px; background:var(--surface); color:var(--text); outline:none; min-width:0; }
+  textarea { resize:vertical; line-height:1.6; }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(42,120,214,.15); }
+  .btn { padding:8px 14px; background:var(--text); color:var(--surface); border:none; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; width:auto; }
+  .btn.ghost { background:var(--surface); color:var(--text); border:.5px solid var(--border); }
+  .btn.sm { padding:5px 9px; font-size:12px; }
+  .btn:hover { opacity:.8; }
+  .lbl { font-size:12px; color:var(--text3); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:7px 6px; border-bottom:.5px solid var(--border); text-align:left; vertical-align:middle; }
+  th { color:var(--text3); font-weight:500; font-size:12px; }
+  .bar { height:8px; background:var(--muted-bg); border-radius:4px; overflow:hidden; min-width:60px; }
+  .bar > i { display:block; height:100%; background:var(--good); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { padding:9px 12px; border:.5px solid var(--border); border-radius:10px; background:var(--surface); font-size:14px; cursor:pointer; user-select:none; min-width:74px; text-align:center; color:var(--text2); }
+  .chip.on { background:var(--good); color:#fff; border-color:var(--good); font-weight:600; }
+  .seg { display:flex; gap:4px; }
+  .seg button { padding:6px 9px; border:.5px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text2); font-size:13px; cursor:pointer; }
+  .seg button.on { color:#fff; font-weight:600; }
+  .seg button.s3.on { background:var(--good); border-color:var(--good); }
+  .seg button.s2.on { background:var(--accent); border-color:var(--accent); }
+  .seg button.s1.on { background:var(--mid); border-color:var(--mid); }
+  .seg button.s0.on { background:var(--bad); border-color:var(--bad); }
+  .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; margin-bottom:12px; }
+  .stat div { background:var(--muted-bg); border-radius:10px; padding:10px; }
+  .stat b { display:block; font-size:20px; } .stat span { font-size:11px; color:var(--text3); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; background:var(--muted-bg); color:var(--text2); }
+  .tag.gold { background:#fdecb5; color:#6a5200; }
+  .empty { color:var(--text3); font-size:13px; padding:10px 0; }
+  .sub-tabs { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .sub-tabs button { padding:6px 12px; border-radius:20px; border:.5px solid var(--border); background:var(--surface); color:var(--text2); font-size:13px; cursor:pointer; }
+  .sub-tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .tt td, .tt th { text-align:center; padding:4px; } .tt input { text-align:center; padding:6px 2px; font-size:13px; }
+  .overflow { overflow-x:auto; }
+  .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--text); color:var(--surface); padding:9px 16px; border-radius:20px; font-size:13px; opacity:0; transition:.25s; pointer-events:none; }
+  .toast.show { opacity:1; }
+  .banner { background:#fef3cd; border:1px solid #f0c940; color:#7a5f00; border-radius:10px; padding:.8rem 1rem; margin-bottom:12px; font-size:13px; }
+  .banner input { background:#fff; color:#333; border-color:#f0c940; }
+  .del { color:var(--bad); background:none; border:none; cursor:pointer; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🏫 우리 반 담임 플랫폼</h1>
+  <div class="sub"><span id="syncMsg" class="sync">이 기기에만 저장 중</span></div>
+  <div id="urlBanner" class="banner" style="display:none">
+    <p style="margin-bottom:6px">구글 시트에 자동 백업하려면 Apps Script 웹앱 주소를 붙여넣으세요 (선택). 설정법은 class-apps-script.gs 상단 참고.</p>
+    <div class="row"><input class="grow" id="urlInput" placeholder="https://script.google.com/macros/s/…/exec"><button class="btn" onclick="saveUrl()">저장</button></div>
+  </div>
+  <nav id="nav"></nav>
+  <div id="page"></div>
+  <div class="row" style="margin-top:24px">
+    <button class="btn ghost sm" onclick="toggleUrl()">☁ 구글 시트 연결</button>
+    <button class="btn ghost sm" onclick="exportData()">⬇ 백업 파일 저장</button>
+    <label class="btn ghost sm" style="cursor:pointer">⬆ 백업 불러오기<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+  </div>
+  <p class="lbl">⚠ 학생 개인정보가 들어 있습니다. 기기 화면 잠금을 사용하고, 구글 시트는 본인 계정에서만 접근 가능하게 두세요.</p>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const LS_KEY = 'classHubState', LS_URL = 'classHubUrl', LS_PAGE = 'classHubPage';
+const DAYS = ['일','월','화','수','목','금','토'];
+const LEVELS = ['잘함','보통','노력요함'];
+const HW = [{v:3,t:'◎ 완벽'},{v:2,t:'○ 보통'},{v:1,t:'△ 미흡'},{v:0,t:'✕ 미제출'}];
+
+const blank = () => ({
+  students: [],            // {id, name}
+  assignments: [],         // {id, date, title}
+  hw: {},                  // 'aid|sid' -> 0..3
+  meals: {},               // date -> {sid:1}  (키가 있는 날 = 급식 기록한 날)
+  rewardGiven: {},         // sid -> 지급 횟수
+  settings: { mealGoal: 20, reward: '칭찬 스티커 1장' },
+  assessments: [],         // {id, subject, unit, criterion, method, date}
+  scores: {},              // 'aid|sid' -> {level, memo}
+  memos: {},               // sid -> 관찰 메모(종합의견용 키워드)
+  opinions: {},            // 'sid|subject' 또는 'sid|__total' -> 최종 편집 문장
+  timetable: {1:[],2:[],3:[],4:[],5:[]}, // 요일 -> 교시별 과목
+  supplies: {},            // 과목 -> 준비물
+  events: [],              // {id, date, title, note}
+  notes: {}                // 작성일 -> 알림장 텍스트
+});
+let S = blank(), SCRIPT_URL = localStorage.getItem(LS_URL) || '';
+let page = localStorage.getItem(LS_PAGE) || 'life';
+let ui = { lifeTab:'meal', gradeTab:'record', mealDate:today(), hwId:null, asId:null, opSid:null, opSub:'', noteDate:today() };
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+function today() { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+const dObj = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const fmtD = s => { const d = dObj(s); return `${d.getMonth()+1}월 ${d.getDate()}일(${DAYS[d.getDay()]})`; };
+const stuName = id => (S.students.find(s => s.id === id) || {}).name || '';
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
+
+/* ---------- 저장 / 동기화 ---------- */
+let saveTimer;
+function save() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {}
+  clearTimeout(saveTimer);
+  if (!SCRIPT_URL) return;
+  saveTimer = setTimeout(async () => {
+    try { await fetch(SCRIPT_URL, { method:'POST', mode:'no-cors', body: JSON.stringify({ action:'save', state:S }) }); setSync('☁ 구글 시트에 저장됨'); }
+    catch (e) { setSync('☁ 저장 실패(이 기기에는 저장됨)', true); }
+  }, 1200);
+}
+function setSync(m, err) { const e = $('syncMsg'); e.textContent = m; e.className = 'sync' + (err ? ' err' : ''); }
+function merge(obj) { S = Object.assign(blank(), obj); }
+async function load() {
+  try { const l = JSON.parse(localStorage.getItem(LS_KEY)); if (l) merge(l); } catch (e) {}
+  render();
+  if (!SCRIPT_URL) return;
+  setSync('☁ 불러오는 중…');
+  try {
+    const r = await (await fetch(SCRIPT_URL + '?action=load')).json();
+    if (r && r.state) { merge(r.state); localStorage.setItem(LS_KEY, JSON.stringify(S)); render(); }
+    setSync('☁ 구글 시트와 연결됨');
+  } catch (e) { setSync('☁ 불러오기 실패 — 이 기기 데이터 사용 중', true); }
+}
+function toggleUrl() { const b = $('urlBanner'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; $('urlInput').value = SCRIPT_URL; }
+function saveUrl() {
+  const v = $('urlInput').value.trim();
+  if (v && !v.startsWith('https://script.google.com/')) return toast('script.google.com 주소만 가능해요');
+  SCRIPT_URL = v; localStorage.setItem(LS_URL, v); $('urlBanner').style.display = 'none'; toast(v ? '연결 저장' : '연결 해제'); v ? load() : setSync('이 기기에만 저장 중');
+}
+function exportData() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type:'application/json' }));
+  a.download = `class-backup-${today()}.json`; a.click();
+}
+function importData(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { if (!confirm('현재 데이터를 백업 파일 내용으로 덮어쓸까요?')) return; merge(JSON.parse(r.result)); save(); render(); toast('불러왔어요'); } catch (e) { toast('파일 형식이 올바르지 않아요'); } };
+  r.readAsText(f);
+}
+
+/* ---------- 공통 렌더 ---------- */
+const PAGES = [['life','🧒 생활'],['grade','📝 성적'],['notice','📒 알림장'],['stu','👥 학생']];
+function setPage(p) { page = p; localStorage.setItem(LS_PAGE, p); render(); }
+function render() {
+  $('nav').innerHTML = PAGES.map(([k,t]) => `<button class="${page===k?'on':''}" onclick="setPage('${k}')">${t}</button>`).join('');
+  $('page').innerHTML = ({ life:renderLife, grade:renderGrade, notice:renderNotice, stu:renderStudents })[page]();
+}
+const subTabs = (cur, arr, fn) => `<div class="sub-tabs">${arr.map(([k,t]) => `<button class="${cur===k?'on':''}" onclick="${fn}('${k}')">${t}</button>`).join('')}</div>`;
+const needStudents = () => S.students.length ? '' : `<div class="card empty">먼저 <a href="#" onclick="setPage('stu');return false">👥 학생</a> 탭에서 학생 명단을 등록해 주세요.</div>`;
+
+/* ---------- 학생 ---------- */
+function renderStudents() {
+  return `<div class="card"><h2>학생 명단 등록</h2>
+    <p class="lbl" style="margin-bottom:6px">한 줄에 한 명씩 붙여넣기 (엑셀·한글 명단 복사 가능). 이미 있는 이름은 건너뜁니다.</p>
+    <textarea id="bulk" rows="5" placeholder="김가온&#10;이나래&#10;…"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" onclick="addStudents()">추가</button></div></div>
+  <div class="card"><h2>명단 (${S.students.length}명)</h2>
+    ${S.students.length ? `<table>${S.students.map((s,i) => `<tr><td style="width:36px;color:var(--text3)">${i+1}</td>
+      <td><input value="${esc(s.name)}" onchange="renameStudent('${s.id}',this.value)"></td>
+      <td style="width:36px"><button class="del" onclick="delStudent('${s.id}')">✕</button></td></tr>`).join('')}</table>` : '<div class="empty">아직 없어요</div>'}</div>`;
+}
+function addStudents() {
+  const names = $('bulk').value.split(/\r?\n/).map(s => s.replace(/^\s*\d+[\s.)]+/, '').trim()).filter(Boolean);
+  let n = 0; names.forEach(nm => { if (!S.students.some(s => s.name === nm)) { S.students.push({ id:uid(), name:nm }); n++; } });
+  save(); render(); toast(`${n}명 추가`);
+}
+function renameStudent(id, v) { const s = S.students.find(x => x.id === id); if (s && v.trim()) { s.name = v.trim(); save(); } }
+function delStudent(id) {
+  const nm = stuName(id); if (!confirm(`${nm} 학생과 관련된 모든 기록이 삭제됩니다. 삭제할까요?`)) return;
+  S.students = S.students.filter(s => s.id !== id);
+  const strip = o => Object.keys(o).forEach(k => { if (k.split('|').includes(id)) delete o[k]; });
+  strip(S.hw); strip(S.scores); strip(S.opinions); delete S.memos[id]; delete S.rewardGiven[id];
+  Object.values(S.meals).forEach(m => delete m[id]);
+  save(); render();
+}
+
+/* ---------- 생활: 급식 / 과제 ---------- */
+function renderLife() {
+  return needStudents() || (subTabs(ui.lifeTab, [['meal','🍚 급식 완식'],['hw','📚 과제 성실도']], 'setLifeTab') + (ui.lifeTab === 'meal' ? renderMeal() : renderHw()));
+}
+function setLifeTab(k) { ui.lifeTab = k; render(); }
+
+function mealStats() {
+  const days = Object.keys(S.meals).sort(), total = days.length, goal = Math.max(1, +S.settings.mealGoal || 20);
+  return S.students.map(st => {
+    const cleanDays = days.filter(d => S.meals[d][st.id]);
+    let streak = 0; for (let i = days.length - 1; i >= 0 && S.meals[days[i]][st.id]; i--) streak++;
+    const earned = Math.floor(cleanDays.length / goal), given = S.rewardGiven[st.id] || 0;
+    return { st, count: cleanDays.length, rate: total ? cleanDays.length / total : 0, streak, earned, pending: Math.max(0, earned - given), toNext: goal - (cleanDays.length % goal) };
+  });
+}
+function renderMeal() {
+  const d = ui.mealDate, rec = S.meals[d], st = mealStats(), total = Object.keys(S.meals).length;
+  const pendingAll = st.reduce((a, x) => a + x.pending, 0);
+  return `<div class="card"><h2>오늘 급식</h2>
+    <div class="row"><input type="date" style="width:auto" value="${d}" onchange="ui.mealDate=this.value;render()">
+      <span class="tag">${rec ? '기록됨' : '아직 기록 없음'}</span>
+      <button class="btn ghost sm" onclick="mealAll(true)">전원 완식</button>
+      <button class="btn ghost sm" onclick="mealAll(false)">전원 해제</button>
+      ${rec ? `<button class="btn ghost sm" onclick="mealDel()">이 날 삭제(급식 없음)</button>` : ''}</div>
+    <p class="lbl" style="margin-bottom:8px">남김 없이 먹은 학생을 눌러 초록색으로 표시하세요. 기록을 시작한 날만 '급식일'로 계산됩니다.</p>
+    <div class="chips">${S.students.map(s => `<div class="chip ${rec && rec[s.id] ? 'on' : ''}" onclick="mealToggle('${s.id}')">${esc(s.name)}</div>`).join('')}</div></div>
+  <div class="card"><h2>완식 현황 · 보상</h2>
+    <div class="row"><span class="lbl">보상 기준</span><input type="number" min="1" style="width:70px" value="${S.settings.mealGoal}" onchange="S.settings.mealGoal=Math.max(1,+this.value||20);save();render()"><span class="lbl">일 완식마다</span>
+      <input class="grow" value="${esc(S.settings.reward)}" onchange="S.settings.reward=this.value;save();render()"></div>
+    <div class="stat"><div><b>${total}</b><span>기록한 급식일</span></div><div><b>${total ? Math.round(st.reduce((a,x)=>a+x.count,0)/(total*S.students.length)*100) : 0}%</b><span>학급 평균 완식률</span></div><div><b>${pendingAll}</b><span>미지급 보상</span></div></div>
+    <div class="overflow"><table><tr><th>이름</th><th>완식일</th><th>완식률</th><th>연속</th><th>다음 보상까지</th><th>보상</th></tr>
+    ${st.sort((a,b) => b.count - a.count).map(x => `<tr><td>${esc(x.st.name)}</td><td>${x.count}일</td>
+      <td><div class="bar"><i style="width:${Math.round(x.rate*100)}%"></i></div></td><td>${x.streak}일</td><td>${x.toNext}일</td>
+      <td>${x.pending ? `<span class="tag gold">🎁 ${x.pending}개</span> <button class="btn sm" onclick="giveReward('${x.st.id}')">지급</button>` : (x.earned ? `<span class="tag">받음 ${x.earned}</span>` : '')}</td></tr>`).join('')}</table></div></div>`;
+}
+function mealToggle(id) { const d = ui.mealDate; S.meals[d] = S.meals[d] || {}; S.meals[d][id] ? delete S.meals[d][id] : (S.meals[d][id] = 1); save(); render(); }
+function mealAll(on) { const d = ui.mealDate; S.meals[d] = {}; if (on) S.students.forEach(s => S.meals[d][s.id] = 1); save(); render(); }
+function mealDel() { if (confirm('이 날의 급식 기록을 지울까요?')) { delete S.meals[ui.mealDate]; save(); render(); } }
+function giveReward(id) { S.rewardGiven[id] = (S.rewardGiven[id] || 0) + 1; save(); render(); toast(`${stuName(id)}: ${S.settings.reward} 지급`); }
+
+function hwStats() {
+  return S.students.map(st => {
+    const rec = S.assignments.map(a => S.hw[a.id + '|' + st.id]).filter(v => v !== undefined);
+    const sum = rec.reduce((a, v) => a + v, 0);
+    return { st, n: rec.length, pct: rec.length ? Math.round(sum / (rec.length * 3) * 100) : null, miss: rec.filter(v => v === 0).length };
+  });
+}
+function renderHw() {
+  const list = [...S.assignments].sort((a, b) => b.date.localeCompare(a.date));
+  if (!ui.hwId || !S.assignments.some(a => a.id === ui.hwId)) ui.hwId = list[0] ? list[0].id : null;
+  const cur = S.assignments.find(a => a.id === ui.hwId), stats = hwStats();
+  return `<div class="card"><h2>과제 추가</h2><div class="row"><input type="date" style="width:auto" id="hwDate" value="${today()}"><input class="grow" id="hwTitle" placeholder="예: 수학익힘 32~33쪽"><button class="btn" onclick="addHw()">추가</button></div></div>
+  <div class="card"><h2>성실도 체크</h2>
+    ${list.length ? `<div class="row"><select class="grow" onchange="ui.hwId=this.value;render()">${list.map(a => `<option value="${a.id}" ${a.id===ui.hwId?'selected':''}>${fmtD(a.date)} · ${esc(a.title)}</option>`).join('')}</select>
+      <button class="btn ghost sm" onclick="hwAll(3)">전원 ◎</button><button class="btn ghost sm" onclick="delHw()">과제 삭제</button></div>
+      <div class="overflow"><table>${S.students.map(s => { const v = S.hw[cur.id + '|' + s.id];
+        return `<tr><td>${esc(s.name)}</td><td><div class="seg">${HW.map(h => `<button class="s${h.v} ${v===h.v?'on':''}" onclick="setHw('${cur.id}','${s.id}',${h.v})">${h.t}</button>`).join('')}</div></td></tr>`; }).join('')}</table></div>`
+      : '<div class="empty">과제를 먼저 추가하세요</div>'}</div>
+  <div class="card"><h2>성실도 통계</h2><p class="lbl" style="margin-bottom:6px">성실도 = 체크한 과제의 점수 평균 (◎3 ○2 △1 ✕0 → 백분율)</p>
+    ${S.assignments.length ? `<div class="overflow"><table><tr><th>이름</th><th>기록</th><th>성실도</th><th></th><th>미제출</th></tr>
+      ${stats.sort((a,b) => (a.pct ?? 101) - (b.pct ?? 101)).map(x => `<tr><td>${esc(x.st.name)}</td><td>${x.n}건</td><td>${x.pct ?? '-'}${x.pct!==null?'%':''}</td>
+        <td style="width:30%"><div class="bar"><i style="width:${x.pct||0}%;background:${x.pct>=80?'var(--good)':x.pct>=50?'var(--mid)':'var(--bad)'}"></i></div></td><td>${x.miss}회</td></tr>`).join('')}</table></div>` : '<div class="empty">기록이 쌓이면 표시됩니다</div>'}</div>`;
+}
+function addHw() { const t = $('hwTitle').value.trim(); if (!t) return toast('과제 이름을 입력하세요'); const a = { id:uid(), date:$('hwDate').value || today(), title:t }; S.assignments.push(a); ui.hwId = a.id; save(); render(); }
+function setHw(aid, sid, v) { const k = aid + '|' + sid; S.hw[k] === v ? delete S.hw[k] : (S.hw[k] = v); save(); render(); }
+function hwAll(v) { S.students.forEach(s => S.hw[ui.hwId + '|' + s.id] = v); save(); render(); }
+function delHw() { if (!confirm('이 과제와 체크 기록을 삭제할까요?')) return; S.assignments = S.assignments.filter(a => a.id !== ui.hwId); Object.keys(S.hw).forEach(k => k.startsWith(ui.hwId + '|') && delete S.hw[k]); save(); render(); }
+
+/* ---------- 성적 ---------- */
+function renderGrade() {
+  return needStudents() || (subTabs(ui.gradeTab, [['record','평가 기록'],['opinion','학생별 의견 생성']], 'setGradeTab') + (ui.gradeTab === 'record' ? renderRecord() : renderOpinion()));
+}
+function setGradeTab(k) { ui.gradeTab = k; render(); }
+const subjectsList = () => [...new Set(S.assessments.map(a => a.subject))];
+
+function renderRecord() {
+  const list = [...S.assessments].sort((a, b) => b.date.localeCompare(a.date));
+  if (!ui.asId || !S.assessments.some(a => a.id === ui.asId)) ui.asId = list[0] ? list[0].id : null;
+  const cur = S.assessments.find(a => a.id === ui.asId);
+  return `<div class="card"><h2>평가 계획 추가</h2>
+    <div class="row"><input style="width:110px" id="asSub" list="subList" placeholder="교과(국어)"><datalist id="subList">${subjectsList().map(s => `<option value="${esc(s)}">`).join('')}</datalist>
+      <input class="grow" id="asUnit" placeholder="단원 (예: 3. 문장 만들기)"><input type="date" style="width:auto" id="asDate" value="${today()}"></div>
+    <div class="row"><input class="grow" id="asCrit" placeholder="평가기준/성취기준 (예: 이야기의 흐름을 파악하며 요약하기)"></div>
+    <div class="row"><input class="grow" id="asMethod" placeholder="평가 방법 (예: 서술형 평가, 관찰평가, 포트폴리오)"><button class="btn" onclick="addAs()">추가</button></div></div>
+  <div class="card"><h2>성적 입력</h2>
+    ${list.length ? `<div class="row"><select class="grow" onchange="ui.asId=this.value;render()">${list.map(a => `<option value="${a.id}" ${a.id===ui.asId?'selected':''}>${esc(a.subject)} · ${esc(a.unit)} · ${esc(a.method)} (${fmtD(a.date)})</option>`).join('')}</select>
+      <button class="btn ghost sm" onclick="asAll('보통')">전원 '보통'</button><button class="btn ghost sm" onclick="delAs()">삭제</button></div>
+      <p class="lbl" style="margin-bottom:8px">평가기준: ${esc(cur.criterion) || '(없음)'}</p>
+      <div class="overflow"><table>${S.students.map(s => { const sc = S.scores[cur.id + '|' + s.id] || {};
+        return `<tr><td style="white-space:nowrap">${esc(s.name)}</td>
+          <td><select style="width:92px" onchange="setScore('${cur.id}','${s.id}','level',this.value)"><option value="">-</option>${LEVELS.map(l => `<option ${sc.level===l?'selected':''}>${l}</option>`).join('')}</select></td>
+          <td><input placeholder="특이사항·칭찬 메모 (의견에 반영)" value="${esc(sc.memo)}" onchange="setScore('${cur.id}','${s.id}','memo',this.value)"></td></tr>`; }).join('')}</table></div>`
+      : '<div class="empty">평가 계획을 먼저 추가하세요</div>'}</div>`;
+}
+function addAs() {
+  const g = id => $(id).value.trim(), a = { id:uid(), subject:g('asSub'), unit:g('asUnit'), criterion:g('asCrit'), method:g('asMethod'), date:$('asDate').value || today() };
+  if (!a.subject || !a.criterion) return toast('교과와 평가기준은 필수예요');
+  S.assessments.push(a); ui.asId = a.id; save(); render();
+}
+function setScore(aid, sid, f, v) { const k = aid + '|' + sid; S.scores[k] = S.scores[k] || {}; S.scores[k][f] = v; if (!S.scores[k].level && !S.scores[k].memo) delete S.scores[k]; save(); }
+function asAll(l) { S.students.forEach(s => { const k = ui.asId + '|' + s.id; S.scores[k] = Object.assign({}, S.scores[k], { level:l }); }); save(); render(); }
+function delAs() { if (!confirm('이 평가와 성적 기록을 삭제할까요?')) return; const id = ui.asId; S.assessments = S.assessments.filter(a => a.id !== id); Object.keys(S.scores).forEach(k => k.startsWith(id + '|') && delete S.scores[k]); save(); render(); }
+
+/* 문장 생성 (규칙 기반 초안) */
+const LV_PHRASE = {
+  '잘함': '내용을 정확히 이해하고 스스로 문제를 해결하는 능력이 뛰어남',
+  '보통': '기본 내용을 이해하고 주어진 과제를 알맞게 해결함',
+  '노력요함': '교사의 도움을 받아 해결하려 노력하며 반복 학습을 통해 꾸준히 성장하고 있음'
+};
+const endDot = s => { s = s.trim(); return /[.!?]$/.test(s) ? s : s + '.'; };
+function subjectDraft(sid, subject) {
+  const parts = S.assessments.filter(a => a.subject === subject).sort((a, b) => a.date.localeCompare(b.date)).map(a => {
+    const sc = S.scores[a.id + '|' + sid]; if (!sc || !sc.level) return '';
+    const unit = a.unit ? `${a.unit.replace(/^\d+\.\s*/, '')} 단원에서 ` : '';
+    const how = a.method ? `${a.method} 결과 ` : '';
+    return `${unit}'${a.criterion}' 성취기준에 대해 ${how}${LV_PHRASE[sc.level]}.` + (sc.memo ? ' ' + endDot(sc.memo) : '');
+  }).filter(Boolean);
+  return parts.join(' ');
+}
+function totalDraft(sid) {
+  const h = hwStats().find(x => x.st.id === sid), m = mealStats().find(x => x.st.id === sid), out = [];
+  if (h && h.pct !== null) out.push(h.pct >= 90 ? '맡은 과제를 빠짐없이 성실하게 해결하며 책임감이 강함' : h.pct >= 70 ? '과제를 대체로 성실하게 해결하며 꾸준히 노력하는 모습을 보임' : h.pct >= 40 ? '과제 수행에서 꾸준함을 기르면 더욱 성장할 것으로 기대됨' : '과제를 스스로 챙기는 습관을 기를 수 있도록 지도하고 있음');
+  if (m && Object.keys(S.meals).length) out.push(m.rate >= 0.9 ? '급식을 남기지 않고 골고루 먹는 바른 식습관을 지니고 있음' : m.rate >= 0.6 ? '급식을 즐겁게 먹으며 골고루 먹으려고 노력함' : '골고루 먹는 습관을 기르기 위해 노력하고 있음');
+  const memo = (S.memos[sid] || '').trim();
+  return out.map(endDot).join(' ') + (memo ? ' ' + endDot(memo) : '');
+}
+const opKey = (sid, sub) => sid + '|' + sub;
+function renderOpinion() {
+  const subs = subjectsList();
+  if (!ui.opSid || !S.students.some(s => s.id === ui.opSid)) ui.opSid = S.students[0].id;
+  if (ui.opSub !== '__total' && !subs.includes(ui.opSub)) ui.opSub = subs[0] || '__total';
+  const sid = ui.opSid, sub = ui.opSub, key = opKey(sid, sub);
+  const draft = sub === '__total' ? totalDraft(sid) : subjectDraft(sid, sub), saved = S.opinions[key];
+  return `<div class="card"><h2>학생별 의견</h2>
+    <div class="row"><select class="grow" onchange="ui.opSid=this.value;render()">${S.students.map(s => `<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+      <select class="grow" onchange="ui.opSub=this.value;render()">${subs.map(s => `<option ${s===sub?'selected':''} value="${esc(s)}">${esc(s)} 교과 의견</option>`).join('')}<option value="__total" ${sub==='__total'?'selected':''}>학기말 종합의견</option></select></div>
+    ${sub === '__total' ? `<p class="lbl">관찰 메모 (장점·특기·변화 등 키워드를 자유롭게 — 종합의견에 반영)</p><textarea rows="2" onchange="S.memos['${sid}']=this.value;save();render()">${esc(S.memos[sid])}</textarea>` : ''}
+    <p class="lbl" style="margin:10px 0 4px">${saved !== undefined ? '✎ 저장된(수정한) 의견' : '자동 생성 초안'}</p>
+    <textarea id="opText" rows="7" onchange="S.opinions['${key}']=this.value;save();toast('저장됨')">${esc(saved !== undefined ? saved : draft)}</textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" onclick="copyText($('opText').value)">복사</button>
+      <button class="btn ghost" onclick="S.opinions['${key}']=${JSON.stringify(draft).replace(/</g,'\\u003c')};save();render()">초안으로 되돌리기</button>
+      <button class="btn ghost" onclick="copyClaudePrompt()">✨ Claude에게 다듬기 요청문 복사</button></div>
+    ${draft ? '' : '<p class="empty">성적/기록이 아직 없어 초안이 비어 있어요.</p>'}
+    <p class="lbl">※ 초안은 입력한 수준·메모로 만든 기본 문장이에요. 요청문을 복사해 Claude에 붙여 넣으면 자연스럽게 다듬어 줍니다. 학생 이름은 요청문에 포함되지 않습니다.</p></div>`;
+}
+function copyClaudePrompt() {
+  const sid = ui.opSid, sub = ui.opSub, total = sub === '__total';
+  const draft = $('opText').value.trim() || (total ? totalDraft(sid) : subjectDraft(sid, sub));
+  const p = total
+    ? `초등학교 담임교사로서 나이스 '행동특성 및 종합의견'을 작성하려 합니다. 아래 관찰 내용을 바탕으로 학생 이름 없이 '~함', '~임' 종결의 3~4문장으로 자연스럽게 다듬어 주세요. 구체적 사례 중심, 긍정적 표현, 과장·추측 금지.\n\n[관찰 내용]\n${draft}`
+    : `초등학교 담임교사로서 나이스 '교과학습발달상황 세부능력 및 특기사항(${sub})'을 작성하려 합니다. 아래 평가 결과를 바탕으로 학생 이름 없이 '~함', '~임' 종결의 2~3문장으로 자연스럽게 다듬어 주세요. 성취기준과 학습 모습이 드러나게 하고 과장·추측은 금지.\n\n[평가 결과]\n${draft}`;
+  copyText(p);
+}
+function copyText(t) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('복사했어요'), () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); toast('복사했어요'); }); }
+
+/* ---------- 알림장 ---------- */
+function nextSchoolDay(ds) { const d = dObj(ds); do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function genNotice(ds) {
+  const tgt = nextSchoolDay(ds), wd = dObj(tgt).getDay(), subs = (S.timetable[wd] || []).filter(Boolean);
+  const lines = [`📒 ${fmtD(ds)} 알림장`, ''];
+  lines.push(`■ ${fmtD(tgt)} 시간표`);
+  lines.push(subs.length ? subs.map((s, i) => `${i+1}. ${s}`).join('  ') : '(시간표 미등록)');
+  const sup = [...new Set(subs)].map(s => S.supplies[s] && `${s}: ${S.supplies[s]}`).filter(Boolean);
+  const ev = S.events.filter(e => e.date === tgt), evNow = S.events.filter(e => e.date === ds && e.note);
+  const hw = S.assignments.filter(a => a.date === ds);
+  const prep = [...sup, ...ev.filter(e => e.note).map(e => `${e.title}: ${e.note}`)];
+  lines.push('', '■ 준비물', prep.length ? prep.map(x => '- ' + x).join('\n') : '- 특별한 준비물 없음');
+  lines.push('', '■ 숙제', hw.length ? hw.map(a => '- ' + a.title).join('\n') : '- 없음');
+  const evl = ev.map(e => `${e.title}`);
+  if (evl.length) lines.push('', `■ ${fmtD(tgt)} 일정`, ...evl.map(x => '- ' + x));
+  const upcoming = S.events.filter(e => e.date > tgt && e.date <= addDays(tgt, 7)).sort((a, b) => a.date.localeCompare(b.date));
+  if (upcoming.length) lines.push('', '■ 이번 주 예정', ...upcoming.map(e => `- ${fmtD(e.date)} ${e.title}`));
+  lines.push('', '■ 전달사항', '- ');
+  return lines.join('\n');
+}
+function addDays(ds, n) { const d = dObj(ds); d.setDate(d.getDate() + n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function renderNotice() {
+  const ds = ui.noteDate, txt = S.notes[ds] !== undefined ? S.notes[ds] : genNotice(ds);
+  const evs = [...S.events].sort((a, b) => a.date.localeCompare(b.date)).filter(e => e.date >= addDays(today(), -7));
+  return `<div class="card"><h2>알림장</h2>
+    <div class="row"><span class="lbl">작성일</span><input type="date" style="width:auto" value="${ds}" onchange="ui.noteDate=this.value;render()">
+      <button class="btn ghost sm" onclick="ui.noteDate=today();render()">오늘</button>
+      <button class="btn ghost sm" onclick="regenNotice()">🔄 일정으로 다시 생성</button></div>
+    <p class="lbl" style="margin-bottom:6px">${S.notes[ds] !== undefined ? '✎ 수정본(저장됨)' : '자동 생성 초안'} — 자유롭게 고쳐 쓰면 자동 저장됩니다.</p>
+    <textarea id="noteText" rows="14" onchange="S.notes[ui.noteDate]=this.value;save();toast('저장됨')">${esc(txt)}</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" onclick="copyText($('noteText').value)">복사 (학부모 메신저·칠판용)</button></div></div>
+  <div class="card"><h2>주간 시간표</h2><p class="lbl" style="margin-bottom:6px">교시별 과목을 적어 두면 다음 등교일 시간표가 알림장에 들어갑니다.</p>
+    <div class="overflow"><table class="tt"><tr><th></th>${[1,2,3,4,5].map(d => `<th>${DAYS[d]}</th>`).join('')}</tr>
+    ${[0,1,2,3,4,5].map(p => `<tr><th>${p+1}</th>${[1,2,3,4,5].map(d => `<td><input value="${esc((S.timetable[d]||[])[p])}" onchange="setTT(${d},${p},this.value)"></td>`).join('')}</tr>`).join('')}</table></div></div>
+  <div class="card"><h2>과목별 준비물</h2><p class="lbl" style="margin-bottom:6px">시간표에 해당 과목이 있으면 준비물에 자동으로 들어갑니다.</p>
+    ${[...new Set(Object.values(S.timetable).flat().filter(Boolean))].map(s => `<div class="row"><span style="width:70px;font-size:13px">${esc(s)}</span><input class="grow" placeholder="예: 리코더, 교과서" value="${esc(S.supplies[s])}" onchange="S.supplies['${esc(s).replace(/'/g,"\\'")}']=this.value;save()"></div>`).join('') || '<div class="empty">시간표를 입력하면 여기에 과목이 나타납니다</div>'}</div>
+  <div class="card"><h2>학급 일정 · 행사</h2>
+    <div class="row"><input type="date" style="width:auto" id="evDate" value="${addDays(today(),1)}"><input class="grow" id="evTitle" placeholder="일정 (예: 현장체험학습, 학부모 상담)"><input class="grow" id="evNote" placeholder="준비물/안내 (선택)"><button class="btn" onclick="addEv()">추가</button></div>
+    ${evs.length ? `<table>${evs.map(e => `<tr><td style="white-space:nowrap">${fmtD(e.date)}</td><td>${esc(e.title)}${e.note ? ` <span class="lbl">· ${esc(e.note)}</span>` : ''}</td><td style="width:30px"><button class="del" onclick="delEv('${e.id}')">✕</button></td></tr>`).join('')}</table>` : '<div class="empty">등록된 일정이 없어요</div>'}</div>`;
+}
+function setTT(d, p, v) { S.timetable[d] = S.timetable[d] || []; S.timetable[d][p] = v.trim(); save(); render(); }
+function addEv() { const t = $('evTitle').value.trim(); if (!t) return toast('일정 이름을 입력하세요'); S.events.push({ id:uid(), date:$('evDate').value, title:t, note:$('evNote').value.trim() }); save(); render(); }
+function delEv(id) { S.events = S.events.filter(e => e.id !== id); save(); render(); }
+function regenNotice() { if (S.notes[ui.noteDate] !== undefined && !confirm('수정한 내용이 사라지고 새로 생성됩니다. 계속할까요?')) return; delete S.notes[ui.noteDate]; save(); render(); }
+
+load();
+</script>
+</body>
+</html>
