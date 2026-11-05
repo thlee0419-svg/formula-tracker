@@ -109,6 +109,12 @@
   .trend-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-bottom: 1rem; }
   .trend-stats .stat { padding: .7rem .8rem; }
   .trend-stats .stat-value { font-size: 16px; }
+  .cash-banner { background: var(--surface); border: 1px solid var(--accent); border-radius: 12px; padding: .9rem 1rem; margin-bottom: 1rem; font-size: 13px; line-height: 1.6; }
+  .cash-banner .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .cash-row { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.6fr); gap: 10px; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+  .cash-row:last-of-type { border-bottom: none; }
+  .cash-row .sub { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 760px) { .cash-row { grid-template-columns: 1fr 1fr; } .cash-row .sub { grid-column: 1 / -1; } }
   .note { font-size: 12px; color: var(--text-muted); margin-top: .75rem; line-height: 1.6; }
   .empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
   .tag { font-size: 10px; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: 99px; padding: 1px 6px; margin-left: 6px; }
@@ -266,6 +272,7 @@
   </section>
 
   <section class="page" data-page="holdings">
+  <div id="cashMigrate"></div>
   <div class="card">
     <div class="card-label">보유 종목 추가</div>
     <div class="form-grid">
@@ -284,6 +291,8 @@
     <div class="tabs" id="tabs"></div>
     <div class="table-scroll" id="holdings"></div>
   </div>
+
+  <div class="card" id="cashCard"></div>
 
   <div class="card">
     <div class="card-label">섹터 목록 관리</div>
@@ -594,6 +603,15 @@ function addHolding() {
   const avg = parseFloat(document.getElementById('fAvg').value);
   let cur = parseFloat(document.getElementById('fCur').value);
   if (!name || !(qty > 0) || !(avg >= 0)) { alert('종목명, 수량, 평균 매수가를 입력해 주세요.'); return; }
+  if (CASH_NAME.test(name)) {                                    // 현금은 종목이 아니라 현금 잔고로
+    const amount = qty * (cur >= 0 && document.getElementById('fCur').value !== '' ? cur : avg);
+    if (confirm(`현금은 종목이 아니라 계좌의 현금 잔고로 관리해요.\n${ACCT[acct].name} 현금 잔고에 ${fmtCash(amount, acct)}을(를) 더할까요?`)) {
+      state.cash[acct] = Math.round(((Number(state.cash[acct]) || 0) + amount) * 100) / 100;
+      ['fName','fTicker','fSector','fQty','fAvg','fCur'].forEach(i => document.getElementById(i).value = '');
+      persist(); render();
+    }
+    return;
+  }
   if (!(cur >= 0)) cur = avg;
   ensureSector(sector);
   state.holdings.push({ id: uid(), account: acct, name, ticker, sector, qty, avg, cur });
@@ -717,6 +735,7 @@ function render() {
   renderTrend();
   renderTrade();
   renderHoldings();
+  renderCashSection();
   renderFlows();
   renderRealized();
 }
@@ -737,6 +756,46 @@ function delFlow(id) {
   if (!confirm('이 입출금 기록을 삭제할까요?')) return;
   state.flows = state.flows.filter(f => f.id !== id); persist(); render();
 }
+/* ---------- 현금: 종목이 아니라 계좌 잔고로 관리 ---------- */
+const CASH_NAME = /^\s*(현금|예수금|원화|원화\s*현금|달러|외화|usd|krw|cash)\s*(\(.*\))?\s*$/i;
+const isCashLike = h => !!ACCT[h.account] && CASH_NAME.test(h.name || '');
+const fmtCash = (v, acctId) => ACCT[acctId].cur === 'USD' ? '$' + v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : Math.round(v).toLocaleString('ko-KR') + '원';
+function moveCash(id) {                                          // "현금" 종목 → 계좌 현금 잔고
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  const amount = h.qty * h.cur, have = Number(state.cash[h.account]) || 0;
+  if (have > 0) {
+    openDlg(`<h3>현금 잔고로 옮기기</h3>
+      <div class="note" style="margin:0 0 .75rem">${ACCT[h.account].name}에는 이미 현금 잔고 <b>${fmtCash(have, h.account)}</b>이(가) 입력돼 있어요. 같은 돈이면 <b>대체</b>, 따로 있던 돈이면 <b>합산</b>을 고르세요. (이 종목 금액: ${fmtCash(amount, h.account)})</div>
+      <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn ghost" onclick="applyMoveCash('${id}','add')">합산</button><button class="btn" onclick="applyMoveCash('${id}','replace')">대체</button></div>`);
+    return;
+  }
+  if (confirm(`${ACCT[h.account].name} 현금 잔고에 ${fmtCash(amount, h.account)}을(를) 넣고, "${h.name}" 종목은 지울게요.`)) applyMoveCash(id, 'add');
+}
+function applyMoveCash(id, mode) {
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  const amount = h.qty * h.cur, have = Number(state.cash[h.account]) || 0;
+  state.cash[h.account] = Math.round((mode === 'replace' ? amount : have + amount) * 100) / 100;
+  state.holdings = state.holdings.filter(x => x.id !== id);
+  closeDlg(); persist(); render();
+}
+function renderCashSection() {
+  const found = state.holdings.filter(isCashLike);
+  document.getElementById('cashMigrate').innerHTML = found.length
+    ? `<div class="cash-banner"><b>💡 현금이 종목으로 들어가 있어요</b><br>현금은 종목이 아니라 계좌의 "현금 잔고"로 관리하는 게 맞아요. 옮기면 종목 목록과 포지션에서 빠지고, 총자산에는 그대로 반영돼요.` +
+      found.map(h => `<div class="row"><span><span class="dot" style="--c:${ACCT[h.account].color}"></span>${ACCT[h.account].name} · ${esc(h.name)} <b>${fmtCash(h.qty * h.cur, h.account)}</b></span><button class="btn" onclick="moveCash('${h.id}')">현금 잔고로 옮기기</button></div>`).join('') + '</div>'
+    : '';
+  const card = document.getElementById('cashCard');
+  if (card.contains(document.activeElement)) return;               // 입력 중에는 다시 그리지 않음
+  const { total } = compute(), assets = total.value + total.cash;
+  const ids = ACCOUNTS.filter(a => filter === 'all' || a.id === filter);
+  card.innerHTML = `<div class="card-label">현금 잔고 (종목이 아닌 계좌별 예수금)</div>` +
+    ids.map(a => { const v = Number(state.cash[a.id]) || 0, krw = toKRW(v, a.id);
+      return `<div class="cash-row"><span><span class="dot" style="--c:${a.color}"></span>${a.name}${a.cur === 'USD' ? ' <span class="sub">(USD)</span>' : ''}</span>
+        <input type="number" min="0" step="any" inputmode="decimal" value="${v || ''}" placeholder="0" onchange="setCash('${a.id}', this.value)" aria-label="${a.name} 현금 잔고">
+        <span class="sub">${a.cur === 'USD' ? '≈ ' + fmtKRW(krw) + ' · ' : ''}전체 자산의 ${assets ? (krw / assets * 100).toFixed(1) : '0.0'}%</span></div>`; }).join('') +
+    `<div class="note">현금 합계 <b>${fmtKRW(total.cash)}</b> · 총자산, 계좌 비중, 섹터 도넛의 "현금", 트레이딩 기준 금액에 반영돼요. 매매할 때마다 직접 고쳐 주세요.</div>`;
+}
+
 function setCash(id, v) {
   const n = parseFloat(v);
   state.cash[id] = n >= 0 ? n : 0; persist(); render();
