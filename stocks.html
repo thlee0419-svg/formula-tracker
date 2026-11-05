@@ -241,7 +241,6 @@
     <button data-page="home" onclick="showPage('home')"><span class="ic">📊</span><span>요약</span></button>
     <button data-page="holdings" onclick="showPage('holdings')"><span class="ic">💼</span><span>보유 종목</span></button>
     <button data-page="trend" onclick="showPage('trend')"><span class="ic">📈</span><span>자산 추이</span></button>
-    <button data-page="monthly" onclick="showPage('monthly')"><span class="ic">📅</span><span>월별 성과</span></button>
     <button data-page="money" onclick="showPage('money')"><span class="ic">💰</span><span>입출금</span></button>
     <button data-page="trade" onclick="showPage('trade')"><span class="ic">🎯</span><span>트레이딩</span></button>
   </div>
@@ -263,6 +262,7 @@
     </div>
     <div class="note">전체 자산 = 보유 종목 평가금액 + 현금 잔고. 섹터는 아래 보유 종목 표에서 종목별로 바로 고칠 수 있어요. 비워 두면 "미분류"로 묶여요.</div>
   </div>
+
   </section>
 
   <section class="page" data-page="holdings">
@@ -297,19 +297,17 @@
   </section>
 
   <section class="page" data-page="trend">
-  <div class="card">
+  <div class="tabs" id="tModeTabs"></div>
+  <div class="card" id="trendCard">
     <div class="card-label">자산 총계 추이 (평가금액 + 현금)</div>
     <div class="tabs" id="tViewTabs"></div>
     <div class="tabs" id="tAcctTabs"></div>
     <div class="trend-stats" id="trendStats"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="trendChart" role="img" aria-label="자산 총계 추이 꺾은선 차트"></canvas></div>
     <div class="table-scroll" id="trendTable" style="margin-top:1rem"></div>
-    <div class="note">일별 기록은 앱을 열 때마다 그날 값으로 자동 저장돼요(그날 마지막으로 연 시점의 값). 앱을 열지 않은 날은 기록이 비어 있고, 입금·출금도 자산 총계에 그대로 반영돼요. 입출금을 뺀 순수 투자 성과는 "월별 성과" 탭에서 볼 수 있어요.</div>
+    <div class="note">일별 기록은 앱을 열 때마다 그날 값으로 자동 저장돼요(그날 마지막으로 연 시점의 값). 앱을 열지 않은 날은 기록이 비어 있고, 입금·출금도 자산 총계에 그대로 반영돼요. 입출금을 뺀 순수 투자 성과는 위의 "월별 성과" 보기에서 볼 수 있어요.</div>
   </div>
-  </section>
-
-  <section class="page" data-page="monthly">
-  <div class="card">
+  <div class="card" id="perfCard" style="display:none">
     <div class="card-label">월별 누적 성과</div>
     <div class="tabs" id="mTabs"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="monthChart" role="img" aria-label="월별 누적 손익 및 월간 손익 차트"></canvas></div>
@@ -641,8 +639,9 @@ function delRealized(id) {
   state.realized = state.realized.filter(r => r.id !== id); persist(); render();
 }
 function setFilter(f) { filter = f; render(); }
-const PAGES = ['home', 'holdings', 'trend', 'monthly', 'money', 'trade'], LS_PAGE = 'stockDashboardPage';
+const PAGES = ['home', 'holdings', 'trend', 'money', 'trade'], LS_PAGE = 'stockDashboardPage';
 function showPage(name, rerender = true) {
+  if (name === 'monthly') { name = 'trend'; tMode = 'perf'; }      // 예전에 저장된 탭 이름
   if (!PAGES.includes(name)) name = 'home';
   document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.dataset.page === name));
   document.querySelectorAll('#pageNav button').forEach(b => b.classList.toggle('active', b.dataset.page === name));
@@ -717,7 +716,6 @@ function render() {
   renderSectors();
   renderTrend();
   renderTrade();
-  renderMonthly();
   renderHoldings();
   renderFlows();
   renderRealized();
@@ -805,7 +803,8 @@ function delSnapshot(month) {
   state.snapshots = state.snapshots.filter(x => x.month !== month); persist(); render();
 }
 /* ---------- 자산 총계 추이 (일별 / 월별) ---------- */
-let tView = 'daily', tAcct = 'all', tRange = 90, tChart = null;
+let tView = 'daily', tAcct = 'all', tRange = 90, tChart = null, tMode = 'asset';
+function setTMode(m) { tMode = m; renderTrend(); }
 function setTView(v) { tView = v; renderTrend(); }
 function setTAcct(a) { tAcct = a; renderTrend(); }
 function setTRange(n) { tRange = n; renderTrend(); }
@@ -825,6 +824,11 @@ function trendSeries() {
   return rows;
 }
 function renderTrend() {
+  document.getElementById('tModeTabs').innerHTML = [['asset', '📈 자산 총계'], ['perf', '📅 월별 성과']]
+    .map(([id, name]) => `<button class="tab ${tMode === id ? 'active' : ''}" onclick="setTMode('${id}')">${name}</button>`).join('');
+  document.getElementById('trendCard').style.display = tMode === 'asset' ? '' : 'none';
+  document.getElementById('perfCard').style.display = tMode === 'perf' ? '' : 'none';
+  if (tMode === 'perf') { renderMonthly(); return; }                // 보이는 상태에서 차트를 그림
   const tabs = (items, cur, fn) => items.map(([id, name]) => `<button class="tab ${cur === id ? 'active' : ''}" onclick="${fn}('${id}')">${name}</button>`).join('');
   document.getElementById('tViewTabs').innerHTML =
     tabs([['daily', '일별'], ['monthly', '월별']], tView, 'setTView') +
