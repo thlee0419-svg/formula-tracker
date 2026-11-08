@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#2f8a4d">
 <link rel="manifest" href="habits.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" href="icons/habits-apple-touch.png">
 <title>습관의 숲</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -205,6 +205,9 @@
   .pip.fut { opacity:.45; }
   .minibars i.n { background:var(--text3); opacity:.5; }
   .minibars i.cur { background:var(--accent); opacity:.5; }
+  .sync { font-size:12px; color:var(--text3); text-align:center; margin:-6px 0 8px; }
+  .sync:empty { display:none; }
+  .sync.error { color:var(--red); }
   .burst { position:fixed; bottom:22vh; font-size:28px; animation:rise 1.5s ease-out forwards; pointer-events:none; z-index:70; }
   @keyframes rise { from { transform:translateY(0) scale(.6); opacity:1; } to { transform:translateY(-62vh) scale(1.3); opacity:0; } }
   @media (prefers-reduced-motion: reduce) { .burst { display:none; } }
@@ -223,6 +226,7 @@
     <h1>🌳 습관의 숲</h1>
     <button class="icon-btn" data-act="settings" aria-label="설정">⚙️</button>
   </header>
+  <div class="sync" id="sync"></div>
   <div class="demo" id="demoBanner" hidden>예시 기록으로 채운 체험 화면이에요. 나무를 눌러 보고 ⚙️ 설정에서 초기화하면 빈 숲에서 시작해요.</div>
   <div class="tabs" id="tabs"></div>
   <div id="viewForest">
@@ -246,6 +250,8 @@
 <script>
 'use strict';
 const KEY = 'habit-trees-v1';
+const LS_URL = 'habit-trees-sync-url', LS_BASE = 'habit-trees-sync-base', LS_DIRTY = 'habit-trees-dirty', LS_BACKUP = 'habit-trees-v1-backup';
+let SYNC_URL = '';
 const GOAL = 500;
 const GROUPS = { att: '🧘 마음가짐 (태도)', growth: '🌱 자기계발' };
 const MILESTONES = [3,7,14,21,30,50,66,100,150,200,300,365,500];
@@ -291,9 +297,17 @@ function norm(j) { j.notes = j.notes || {}; j.slips = j.slips || {}; j.rest = j.
   (j.habits || []).forEach(h => { if (h.id === 'workout' && h.weekly === undefined) h.weekly = 3; });   // 운동은 주 3회 목표로 한 번만 전환
   return j; }
 function blank() { return { habits: DEFAULTS.map(d => ({...d})), log: {}, notes: {}, slips: {}, rest: {} }; }
-function save() {
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function saveLocal() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { toast('저장에 실패했어요. 저장 공간을 확인해 주세요'); }
+}
+function save() {
+  S.updatedAt = Date.now();
+  saveLocal();
+  lsSet(LS_DIRTY, '1');          // 아직 시트에 올리지 못한 변경이 있음
+  schedulePush();
 }
 
 /* ---------- 기록 접근 ---------- */
@@ -902,16 +916,31 @@ function formHTML(h) {
 }
 
 function settingsHTML() {
+  const link = SYNC_URL ? `${location.origin}${location.pathname}#sync=${encodeURIComponent(SYNC_URL)}` : '';
   return `
     <div class="sheet-head"><h3>⚙️ 설정</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
-    <div class="card" style="margin-top:8px">
+    ${S.demo ? '' : `<div class="card" style="margin-top:8px">
+      <b>🔄 기기 간 동기화 (구글 시트)</b>
+      <div class="hint">컴퓨터와 휴대폰의 기록을 같은 구글 시트에 맞춰요. 한 번만 설정하면 이후에는 자동으로 저장하고 불러와요. 설정 방법은 <code>habits-apps-script.gs</code> 파일 맨 위에 적혀 있어요.</div>
+      <label class="l" for="sync-url">웹 앱 URL</label>
+      <input type="text" id="sync-url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(SYNC_URL)}">
+      <div class="btnrow"><button class="btn primary" data-act="syncSave">${SYNC_URL ? '저장하고 동기화' : '연결하기'}</button>${SYNC_URL ? '<button class="btn ghost" data-act="syncNow">지금 동기화</button>' : ''}</div>
+      ${SYNC_URL ? `<label class="l" for="sync-link">다른 기기 설정 링크</label><input type="text" id="sync-link" readonly value="${esc(link)}">
+        <div class="btnrow"><button class="btn ghost" data-act="syncCopy">링크 복사</button><button class="btn danger" data-act="syncOff">연결 끊기</button></div>
+        <div class="hint">휴대폰에서 이 링크를 열면 같은 시트로 바로 연결돼요. 두 기기에서 같은 날을 동시에 고치면 지금 쓰는 기기의 내용이 우선돼요.</div>` : ''}
+    </div>
+    <div class="card">
+      <b>📲 홈 화면에 앱처럼 추가</b>
+      <div class="hint">아이폰: Safari에서 열고 공유 버튼 → “홈 화면에 추가”<br>안드로이드: Chrome 메뉴(⋮) → “앱 설치” 또는 “홈 화면에 추가”<br>컴퓨터(Chrome·Edge): 주소창 오른쪽 설치 아이콘</div>
+    </div>`}
+    <div class="card">
       <b>기록 백업</b>
-      <div class="hint">기록은 이 기기의 브라우저에만 저장돼요. 브라우저 데이터를 지우면 사라지니, 가끔 백업 파일을 내려받아 두세요. (한 일·못 지킨 상황 기록도 함께 담겨요)</div>
+      <div class="hint">기록은 이 기기의 브라우저에 저장돼요(동기화를 켜면 시트에도 저장돼요). 가끔 백업 파일을 내려받아 두면 더 안전해요.</div>
       <div class="btnrow"><button class="btn ghost" data-act="export">내보내기</button><button class="btn ghost" data-act="import">불러오기</button></div>
     </div>
     <div class="card">
       <b>초기화</b>
-      <div class="hint">모든 나무와 기록을 지우고 처음 상태로 되돌립니다.</div>
+      <div class="hint">모든 나무와 기록을 지우고 처음 상태로 되돌립니다.${S.demo ? '' : ' 동기화가 켜져 있으면 시트의 기록도 함께 바뀌어요.'}</div>
       <div class="btnrow"><button class="btn danger" data-act="reset">전체 초기화</button></div>
     </div>`;
 }
@@ -1116,6 +1145,14 @@ document.addEventListener('click', e => {
     case 'askYes': { const f = pendingAsk; pendingAsk = null; $('ask').classList.remove('on'); if (f) f(); break; }
     case 'askNo': pendingAsk = null; $('ask').classList.remove('on'); break;
     case 'settings': ui.mode = 'settings'; setSheet(settingsHTML()); break;
+    case 'syncSave': {
+      const u = $('sync-url').value.trim();
+      if (!u.startsWith('https://script.google.com/')) { toast('구글 Apps Script 웹 앱 URL(https://script.google.com/…)을 넣어 주세요'); break; }
+      SYNC_URL = u; lsSet(LS_URL, u); setSheet(settingsHTML()); pullSync(true); break;
+    }
+    case 'syncNow': pullSync(true); break;
+    case 'syncCopy': { const el2 = $('sync-link'); el2.select(); (navigator.clipboard ? navigator.clipboard.writeText(el2.value) : Promise.reject()).then(() => toast('링크를 복사했어요'), () => toast('링크를 길게 눌러 복사해 주세요')); break; }
+    case 'syncOff': ask('동기화 연결을 끊을까요? 이 기기의 기록은 그대로 남아요.', () => { SYNC_URL = ''; lsSet(LS_URL, ''); lsSet(LS_BASE, '0'); setSync(''); setSheet(settingsHTML()); toast('연결을 끊었어요'); }); break;
     case 'export': {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `habit-forest-${todayStr()}.json`; a.click();
@@ -1152,13 +1189,64 @@ $('importFile').addEventListener('change', e => {
   rd.readAsText(f); e.target.value = '';
 });
 
+/* ---------- 구글 시트 동기화 ---------- */
+function setSync(msg, err) { const el = $('sync'); el.textContent = msg; el.className = 'sync' + (err ? ' error' : ''); }
+let pushTimer = null;
+function schedulePush() { if (!SYNC_URL || S.demo) return; clearTimeout(pushTimer); setSync('저장 대기 중...'); pushTimer = setTimeout(pullSync, 1500); }   // 올리기 전에 시트를 먼저 확인해 다른 기기의 변경과 합침
+async function pushNow() {
+  if (!SYNC_URL || S.demo) return;
+  clearTimeout(pushTimer); pushTimer = null; setSync('시트에 저장 중...');
+  try {
+    const stamp = S.updatedAt;
+    await fetch(SYNC_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'save', state: S }) });
+    lsSet(LS_BASE, String(stamp)); if (S.updatedAt === stamp) lsSet(LS_DIRTY, '0');
+    setSync('시트에 저장됨 ✓'); setTimeout(() => setSync(''), 2000);
+  } catch (e) { setSync('시트 저장 실패 (이 기기에는 저장됨)', true); }
+}
+// a: 이 기기, b: 시트. 기록은 합치고, 같은 날이 충돌하면 이 기기 내용을 쓴다
+function mergeStates(a, b) {
+  const m = { ...b, ...a, habits: a.habits.slice() };
+  b.habits.forEach(h => { if (!m.habits.some(x => x.id === h.id)) m.habits.push(h); });
+  ['log', 'notes', 'slips', 'rest'].forEach(k => {
+    m[k] = {};
+    new Set([...Object.keys(a[k] || {}), ...Object.keys(b[k] || {})]).forEach(id => { m[k][id] = { ...(b[k] || {})[id], ...(a[k] || {})[id] }; });
+  });
+  delete m.demo; return m;
+}
+async function pullSync(manual) {
+  if (!SYNC_URL || S.demo) return;
+  clearTimeout(pushTimer); pushTimer = null;
+  setSync('불러오는 중...');
+  try {
+    const res = await fetch(`${SYNC_URL}?action=load`), data = await res.json(), remote = data && data.state;
+    if (!remote || !Array.isArray(remote.habits)) { await pushNow(); return; }      // 시트가 비어 있으면 이 기기 기록을 올림
+    norm(remote);
+    const base = +(lsGet(LS_BASE) || 0), dirty = lsGet(LS_DIRTY) === '1', ru = remote.updatedAt || 0;
+    if (ru > base) {                                                                  // 다른 기기에서 바뀜
+      lsSet(LS_BACKUP, JSON.stringify(S));                                            // 덮어쓰기 전 이 기기 기록을 따로 보관
+      if (dirty) { S = mergeStates(S, remote); S.updatedAt = Date.now(); saveLocal(); render(); await pushNow(); if (manual) toast('두 기기의 기록을 합쳤어요'); }
+      else { S = remote; saveLocal(); lsSet(LS_BASE, String(ru)); setSync(''); refresh(); if (manual) toast('시트의 기록을 불러왔어요'); }
+    } else if (dirty) await pushNow();
+    else { setSync(''); if (manual) toast('이미 최신 상태예요 ✓'); }
+  } catch (e) { setSync('시트 불러오기 실패. 이 기기의 기록을 보여드려요', true); }
+}
+(function () {   // 다른 기기용 설정 링크(#sync=...)로 열면 바로 연결
+  SYNC_URL = lsGet(LS_URL) || '';
+  const m = location.hash.match(/^#sync=(.+)$/);
+  if (m) { try { const u = decodeURIComponent(m[1]); if (u.startsWith('https://script.google.com/')) { SYNC_URL = u; lsSet(LS_URL, u); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {} }
+})();
+
 // 자정이 지나 앱이 다시 보일 때 "오늘"을 갱신
 let lastToday = todayStr();
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && todayStr() !== lastToday) { if (ui.date === lastToday) ui.date = todayStr(); lastToday = todayStr(); render(); }
+  if (document.visibilityState !== 'visible') return;
+  if (todayStr() !== lastToday) { if (ui.date === lastToday) ui.date = todayStr(); lastToday = todayStr(); render(); }
+  if (SYNC_URL && !S.demo && !pushTimer) pullSync();       // 앱으로 돌아오면 다른 기기의 변경을 가져옴
 });
 
 render();
+if (SYNC_URL && !S.demo) pullSync();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
