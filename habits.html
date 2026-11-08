@@ -193,6 +193,18 @@
   .cbrow input { width:20px; height:20px; flex:none; }
   .rrow { display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:9px 12px; margin-top:6px; font-size:13.5px; line-height:1.45; }
   .rrow button { background:none; border:none; color:var(--red); cursor:pointer; font-size:13px; white-space:nowrap; }
+  .wk { display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:12px; color:var(--text3); gap:6px; }
+  .wk b { color:var(--text); font-size:13px; }
+  .wk { flex-wrap:wrap; }
+  .wk > span:first-child { white-space:nowrap; }
+  .pips { display:flex; gap:3px; }
+  .pip { width:11px; height:11px; border-radius:50%; background:var(--muted-bg); border:1px solid var(--border); display:block; }
+  .pip.on { background:var(--accent); border-color:var(--accent); }
+  .pip.rest { border-style:dashed; }
+  .pip.today { outline:2px solid var(--accent); outline-offset:1px; }
+  .pip.fut { opacity:.45; }
+  .minibars i.n { background:var(--text3); opacity:.5; }
+  .minibars i.cur { background:var(--accent); opacity:.5; }
   .burst { position:fixed; bottom:22vh; font-size:28px; animation:rise 1.5s ease-out forwards; pointer-events:none; z-index:70; }
   @keyframes rise { from { transform:translateY(0) scale(.6); opacity:1; } to { transform:translateY(-62vh) scale(1.3); opacity:0; } }
   @media (prefers-reduced-motion: reduce) { .burst { display:none; } }
@@ -237,6 +249,8 @@ const KEY = 'habit-trees-v1';
 const GOAL = 500;
 const GROUPS = { att: '🧘 마음가짐 (태도)', growth: '🌱 자기계발' };
 const MILESTONES = [3,7,14,21,30,50,66,100,150,200,300,365,500];
+const WEEK_MS = [2,4,8,12,26,52];
+const WS_MSG = {2:'2주 연속 달성! 좋은 리듬이에요',4:'4주 연속! 한 달 내내 목표를 지켰어요',8:'8주 연속! 이제 생활 패턴이 됐어요',12:'12주 연속! 석 달을 꾸준히 해냈어요',26:'26주 연속! 반년을 해냈어요',52:'52주 연속! 1년 내내 목표를 지켰어요'};
 const MS_MSG = {3:'3일 연속! 좋은 출발이에요',7:'일주일 연속! 불씨가 붙었어요',14:'2주 연속! 리듬이 잡히고 있어요',21:'21일 연속! 습관의 싹이 보여요',30:'한 달 연속! 정말 대단해요',50:'50일 연속! 반환점이 보여요',66:'66일 연속! 습관이 자리 잡기 시작한다고 자주 말하는 시점이에요',100:'백일 연속! 흔들리지 않는 힘이에요',150:'150일 연속! 이제 생활의 일부예요',200:'200일 연속! 놀라운 꾸준함이에요',300:'300일 연속! 거의 다 왔어요',365:'1년 연속! 한 해를 통째로 해냈어요',500:'500일 연속! 습관이 몸에 배었어요'};
 const STAGES = [[0,'씨앗'],[1,'새싹'],[7,'어린 싹'],[30,'묘목'],[100,'젊은 나무'],[250,'든든한 나무'],[500,'거목']];
 
@@ -246,7 +260,7 @@ const DEFAULTS = [
   { id:'soft',     emoji:'🕊️', name:'반대 의견에도 말을 빨리 하거나 언성 높이지 않기', group:'att', kind:'avoid', plan:'반대 의견을 들으면 → 끝까지 듣고, 천천히 한 문장으로 되묻기', hint:'누구와, 어떤 대화에서 그랬나요?' },
   { id:'read',     emoji:'📚', name:'하루 30분 독서', group:'growth', kind:'do', plan:'', hint:'어떤 책을 읽었나요? (제목, 읽은 쪽수)' },
   { id:'piano',    emoji:'🎹', name:'피아노 연습', group:'growth', kind:'do', plan:'', hint:'무엇을 연습했나요? (곡명, 연습한 부분)' },
-  { id:'workout',  emoji:'🏃', name:'운동 (헬스·러닝)', group:'growth', kind:'do', plan:'', hint:'어떤 운동을 했나요? (예: 러닝 5km, 헬스 하체)' },
+  { id:'workout',  emoji:'🏃', name:'운동 (헬스·러닝)', group:'growth', kind:'do', weekly:3, plan:'', hint:'어떤 운동을 했나요? (예: 러닝 5km, 헬스 하체)' },
   { id:'english',  emoji:'🦉', name:'영어 공부 (Duolingo)', group:'growth', kind:'do', plan:'', hint:'Duolingo 외에 한 것이 있나요? (예: 레슨 3개, 영어 기사)' },
   { id:'stock',    emoji:'📈', name:'주식 공부', group:'growth', kind:'do', plan:'', hint:'무엇을 공부했나요? (종목, 주제, 읽은 자료)' },
   { id:'research', emoji:'🎓', name:'교육 관련 연구', group:'growth', kind:'do', plan:'', hint:'어떤 연구를 했나요? (주제, 읽은 논문·자료)' },
@@ -273,7 +287,9 @@ function load() {
   } catch (e) {}
   return blank();
 }
-function norm(j) { j.notes = j.notes || {}; j.slips = j.slips || {}; j.rest = j.rest || {}; return j; }
+function norm(j) { j.notes = j.notes || {}; j.slips = j.slips || {}; j.rest = j.rest || {};
+  (j.habits || []).forEach(h => { if (h.id === 'workout' && h.weekly === undefined) h.weekly = 3; });   // 운동은 주 3회 목표로 한 번만 전환
+  return j; }
 function blank() { return { habits: DEFAULTS.map(d => ({...d})), log: {}, notes: {}, slips: {}, rest: {} }; }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
@@ -297,7 +313,8 @@ function wiltLevel(id) {
   if (!ds.length) return 0;
   const t = todayStr(); let gap = 0;
   for (let d = addDays(ds[ds.length-1], 1), g = 0; d <= t && g < 400; d = addDays(d, 1), g++) if (!restOf(id, d)) gap++;   // 쉬는 날은 세지 않음
-  return gap < 3 ? 0 : Math.min((gap-2)/5, 1);
+  const h = habit(id), thr = h && h.weekly > 0 ? Math.floor(7 / h.weekly) + 3 : 3;   // 주 N회 습관은 더 오래 쉬어야 시들어요
+  return gap < thr ? 0 : Math.min((gap - thr + 1) / 5, 1);
 }
 // a~b 사이의 모든 날이 쉬는 날이면 이어진 것으로 본다
 function linked(id, a, b) {
@@ -307,15 +324,39 @@ function linked(id, a, b) {
   for (let i = 1; i < n; i++) if (!restOf(id, addDays(a, i))) return false;
   return true;
 }
-function streaks(id) {
+function dailyStreaks(id) {
   const set = new Set(doneDates(id));
   let cur = 0, d = todayStr();
   if (!set.has(d)) d = addDays(d,-1);
   for (let g = 0; g < 4000; g++) { if (set.has(d)) cur++; else if (!restOf(id, d)) break; d = addDays(d,-1); }
   let best = 0, run = 0, prev = null;
   [...set].sort().forEach(k => { run = (prev && linked(id, prev, k)) ? run+1 : 1; best = Math.max(best, run); prev = k; });
-  return { cur, best };
+  return { cur, best, unit: '일' };
 }
+// ---- 주 N회 목표 (한 주는 월~일) ----
+const wStart = d => addDays(d, -((parse(d).getDay() + 6) % 7));
+function weekInfo(id, start) {
+  const h = habit(id), N = (h && h.weekly) || 0; let done = 0, rest = 0;
+  for (let i = 0; i < 7; i++) { const d = addDays(start, i); if (isDone(id, d)) done++; else if (restOf(id, d)) rest++; }
+  const target = Math.min(N, 7 - rest), end = addDays(start, 6), t = todayStr();   // 쉬는 날이 많은 주는 목표도 줄어듦
+  return { start, end, done, rest, target, hit: target > 0 && done >= target, ended: end < t, current: start <= t && t <= end };
+}
+function weeklyStreak(id) {
+  const cs = wStart(todayStr()); let cur = 0;
+  for (let s = cs, g = 0; g < 400; s = addDays(s, -7), g++) {
+    const w = weekInfo(id, s);
+    if (w.target === 0) continue;                  // 통째로 쉰 주는 이어 줌
+    if (w.hit) cur++; else if (s === cs) continue; else break;   // 이번 주는 아직 진행 중이면 끊지 않음
+  }
+  const ds = doneDates(id); let best = 0, run = 0;
+  if (ds.length) for (let s = wStart(ds[0]); s <= cs; s = addDays(s, 7)) {
+    const w = weekInfo(id, s); if (w.target === 0) continue;
+    if (w.hit) { run++; best = Math.max(best, run); } else if (s < cs) run = 0;
+  }
+  return { cur, best: Math.max(best, cur), unit: '주' };
+}
+function weekHist(id, n) { const cs = wStart(todayStr()), out = []; for (let k = n - 1; k >= 0; k--) out.push(weekInfo(id, addDays(cs, -7 * k))); return out; }
+function streaks(id) { const h = habit(id); return h && h.weekly > 0 ? weeklyStreak(id) : dailyStreaks(id); }
 function recentRate(id) {
   const set = new Set(doneDates(id)); let n = 0, rest = 0, t = todayStr();
   for (let i = 0; i < 30; i++) { const d = addDays(t,-i); if (set.has(d)) n++; else if (restOf(id, d)) rest++; }
@@ -445,11 +486,11 @@ function render() {
   const doneNow = hs.filter(h => isDone(h.id, vd)).length;
   const sumDays = hs.reduce((a,h) => a + countDays(h.id), 0);
   let best = null; hs.forEach(h => { const c = countDays(h.id); if (!best || c > best.c) best = { h, c }; });
-  const sts = hs.map(h => ({ h, c: streaks(h.id).cur, done: isDone(h.id, t) }));
-  const live = sts.filter(x => x.c >= 3).sort((a,b) => b.c - a.c);
-  const risk = vd === t ? live.filter(x => !x.done && !restOf(x.h.id, t)) : [];
+  const sts = hs.map(h => { const s = streaks(h.id); return { h, c: s.cur, unit: s.unit, eq: s.unit === '주' ? s.cur * 7 : s.cur, done: isDone(h.id, t) }; });
+  const live = sts.filter(x => x.h.weekly > 0 ? x.c >= 2 : x.c >= 3).sort((a,b) => b.eq - a.eq);
+  const risk = vd === t ? live.filter(x => !(x.h.weekly > 0) && !x.done && !restOf(x.h.id, t)) : [];
   let extra = '';
-  if (live.length) extra += `<div class="nudge" style="margin-top:0">🔥 ${live.length}개 습관 연속 중 · 최장 ${esc(live[0].h.emoji)} ${live[0].c}일</div>`;
+  if (live.length) extra += `<div class="nudge" style="margin-top:0">🔥 ${live.length}개 습관 연속 중 · 최장 ${esc(live[0].h.emoji)} ${live[0].c}${live[0].unit}</div>`;
   if (risk.length) extra += `<div class="nudge" style="margin-top:0">오늘 하면 이어지는 연속: ${risk.map(x => `${esc(x.h.emoji)} ${x.c+1}일째`).join(' · ')}</div>`;
   $('summary').innerHTML =
     `<div class="big">${vd === t ? '오늘' : '이날'} <b>${doneNow}</b> / ${total} 그루에 물을 줬어요</div>` +
@@ -467,7 +508,7 @@ function render() {
 
 function card(h, vd) {
   const days = countDays(h.id), w = wiltLevel(h.id), done = isDone(h.id, vd);
-  const st = streaks(h.id).cur, id = esc(h.id);
+  const sk = streaks(h.id), st = sk.cur, id = esc(h.id);
   let detail = '', acts = '';
   if (h.kind === 'avoid') {
     const sl = slipsOf(h.id, vd);
@@ -481,14 +522,29 @@ function card(h, vd) {
            (done ? `<button class="check note" data-act="editDay" data-id="${id}" data-date="${vd}" aria-label="내용 적기">✎</button>` : '');
   }
   if (!detail && !done && vd === todayStr() && st >= 3 && !restOf(h.id, vd)) detail = `<div class="nudge">오늘 ${h.kind === 'avoid' ? '지키면' : '하면'} ${st+1}일 연속!</div>`;
-  const right = w > 0 ? '<span class="wilt">시들어가요</span>' : (st >= 2 ? `<span class="fire">🔥 ${st}일 연속</span>` : `<span>${STAGES[stageIdx(days)][1]}</span>`);
+  let wkBlock = '';
+  if (h.weekly > 0) {
+    const s0 = wStart(vd), wi = weekInfo(h.id, s0), t0 = todayStr();
+    let pips = '';
+    for (let i = 0; i < 7; i++) { const d = addDays(s0, i); pips += `<i class="pip ${isDone(h.id, d) ? 'on' : restOf(h.id, d) ? 'rest' : ''} ${d === vd ? 'today' : ''} ${d > t0 ? 'fut' : ''}"></i>`; }
+    let msg = '';
+    if (wi.current) {
+      const need = wi.target - wi.done; let remain = 0;
+      for (let i = 0; i < 7; i++) { const d = addDays(s0, i); if (d >= t0 && !restOf(h.id, d) && !isDone(h.id, d)) remain++; }
+      msg = wi.target === 0 ? '이번 주는 쉬는 주예요 🌙' : wi.hit ? `🎉 이번 주 목표 달성!${wi.done > wi.target ? ` (+${wi.done - wi.target})` : ''}`
+        : remain === 0 ? `이번 주는 ${wi.done}/${wi.target}로 마무리돼요` : need >= remain ? `목표까지 ${need}번 · 남은 ${remain}일을 모두 해야 해요` : `목표까지 ${need}번 남았어요`;
+    }
+    wkBlock = `<div class="wk"><span>${wi.current ? '이번 주' : '그 주'} <b>${wi.done}/${wi.target || h.weekly}</b></span><span class="pips">${pips}</span></div>${msg ? `<div class="nudge" style="margin-top:4px;${wi.hit ? 'color:var(--accent)' : ''}">${msg}</div>` : ''}`;
+  }
+  const right = w > 0 ? '<span class="wilt">시들어가요</span>' : (st >= 2 ? `<span class="fire">🔥 ${st}${sk.unit} 연속</span>` : `<span>${STAGES[stageIdx(days)][1]}</span>`);
   return `<div class="hcard">
     <button class="hit" data-act="open" data-id="${id}">
-      ${treeSVG(days, w, h.id, st)}
+      ${treeSVG(days, w, h.id, sk.unit === '주' ? st * 7 : st)}
       <div class="hname">${esc(h.emoji)} ${esc(h.name)}</div>
     </button>
     <div class="hmeta"><span><b>${days}</b> / ${GOAL}일</span>${right}</div>
     <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
+    ${wkBlock}
     ${detail}
     ${restOf(h.id, vd) ? `<div class="restbadge">🌙 ${esc(restOf(h.id, vd))} · 연속은 유지돼요</div>` : ''}
     <div class="acts">${acts}</div>
@@ -501,7 +557,7 @@ const fmtMin = m => m >= 60 ? `${Math.floor(m/60)}시간${m % 60 ? ` ${m % 60}�
 const shortName = h => `${h.emoji} ${h.name.length > 16 ? h.name.slice(0,16) + '…' : h.name}`;
 function rangeFor(p) {
   const t = todayStr();
-  if (p === 'week') return [addDays(t, -parse(t).getDay()), t];
+  if (p === 'week') return [wStart(t), t];
   if (p === 'month') return [t.slice(0,8) + '01', t];
   if (p === '30') return [addDays(t,-29), t];
   return ['', ''];
@@ -574,29 +630,45 @@ function reportHTML() {
   const nav = `<div class="mnav"><button data-act="rprev" ${ui.rm <= earliestYM() ? 'disabled' : ''}>◀</button><b>${mi.y}년 ${mi.m}월</b><button data-act="rnext" ${mi.cur ? 'disabled' : ''}>▶</button></div>`;
   if (!N) return nav + `<div class="empty-msg">나무를 먼저 심어 주세요.</div>`;
   const restN = (id, mo, upto) => Object.keys(S.rest[id] || {}).filter(d => d.startsWith(mo.ym) && +d.slice(8) <= upto && !isDone(id, d)).length;
-  const per = hs.map(h => { const ds = monthDays(h.id, mi.ym), pd = monthDays(h.id, pm.ym);
-    const rs = restN(h.id, mi, mi.elapsed), eff = Math.max(mi.elapsed - rs, 0), peff = Math.max(pm.n - restN(h.id, pm, pm.n), 0);
-    return { h, ds, n: ds.length, rs, eff, rate: eff ? ds.length / eff : 0, prevRate: pd.length && peff ? pd.length / peff : null }; });
+  const stat = (h, mo) => {
+    if (!(h.weekly > 0)) { const n = monthDays(h.id, mo.ym).length, rs = restN(h.id, mo, mo.elapsed); return { n, rs, eff: Math.max(mo.elapsed - rs, 0), credit: n, wHit: 0, wCount: 0 }; }
+    // 주 N회 습관: 한 주 목표를 그 달에 걸친 일수만큼 나눠서 계산(초과 달성은 인정하지 않음)
+    const last = `${mo.ym}-${pad(Math.max(mo.elapsed, 1))}`, ds = new Set(doneDates(h.id));
+    let exp = 0, credit = 0, n = 0, rs = 0, wHit = 0, wCount = 0;
+    if (mo.elapsed > 0) for (let s = wStart(`${mo.ym}-01`); s <= last; s = addDays(s, 7)) {
+      const wi = weekInfo(h.id, s); let cd = 0, dn = 0;
+      for (let i = 0; i < 7; i++) { const d = addDays(s, i); if (d.startsWith(mo.ym) && d <= last) { cd++; if (ds.has(d)) dn++; else if (restOf(h.id, d)) rs++; } }
+      if (!cd) continue;
+      n += dn; const e = wi.target * cd / 7; exp += e; credit += Math.min(dn, e);
+      if (wi.target > 0 && addDays(s, 3).startsWith(mo.ym) && (wi.ended || wi.hit)) { wCount++; if (wi.hit) wHit++; }
+    }
+    return { n, rs, eff: exp, credit, wHit, wCount };
+  };
+  const lab = p => p.h.weekly > 0 ? (p.wCount ? `<b>${p.n}</b>회 · ${p.wHit}/${p.wCount}주 달성` : `<b>${p.n}</b>회`) : `<b>${p.n}</b>/${p.eff}일`;
+  const plain = p => p.h.weekly > 0 ? `${p.n}회, 주 ${p.h.weekly}회 목표` : `${p.n}/${p.eff}일`;
+  const per = hs.map(h => { const s = stat(h, mi), ps = stat(h, pm);
+    return { h, ds: monthDays(h.id, mi.ym), ...s, rate: s.eff ? s.credit / s.eff : 0, prevRate: ps.n && ps.eff ? ps.credit / ps.eff : null, prevCredit: ps.credit, prevEff: ps.eff }; });
   const totalRest = per.reduce((a,p) => a + p.rs, 0), den = per.reduce((a,p) => a + p.eff, 0);
-  const total = per.reduce((a,p) => a + p.n, 0);
+  const total = per.reduce((a,p) => a + p.credit, 0);
   const rate = den ? total / den : 0, pct = Math.round(rate * 100);
-  const prevTotal = hs.reduce((a,h) => a + monthDays(h.id, pm.ym).length, 0);
-  const prevDen = hs.reduce((a,h) => a + Math.max(pm.n - restN(h.id, pm, pm.n), 0), 0);
+  const prevTotal = per.reduce((a,p) => a + p.prevCredit, 0), prevDen = per.reduce((a,p) => a + p.prevEff, 0);
   const delta = prevTotal && prevDen ? pct - Math.round(prevTotal / prevDen * 100) : null;
   const verdict = pct >= 80 ? '정말 꾸준한 한 달이었어요 👏' : pct >= 60 ? '좋은 흐름이에요. 조금만 더 채워 봐요' : pct >= 40 ? '절반 가까이 해냈어요. 쉬운 습관부터 다시 잡아 봐요' : '쉬어간 달이어도 괜찮아요. 가장 쉬운 것 하나부터 다시 시작해요';
 
   // 일별 히트맵
   const cnt = {}; per.forEach(p => p.ds.forEach(d => { cnt[d] = (cnt[d] || 0) + 1; }));
-  const rcnt = {}; hs.forEach(h => Object.keys(S.rest[h.id] || {}).forEach(d => { if (d.startsWith(mi.ym) && !isDone(h.id, d)) rcnt[d] = (rcnt[d] || 0) + 1; }));
+  const dailyHs = hs.filter(h => !(h.weekly > 0)), nDaily = dailyHs.length;
+  const wdone = {}; hs.filter(h => h.weekly > 0).forEach(h => monthDays(h.id, mi.ym).forEach(d => { wdone[d] = (wdone[d] || 0) + 1; }));
+  const rcnt = {}; dailyHs.forEach(h => Object.keys(S.rest[h.id] || {}).forEach(d => { if (d.startsWith(mi.ym) && !isDone(h.id, d)) rcnt[d] = (rcnt[d] || 0) + 1; }));
   let heat = DOW.map(d => `<div class="dow">${d}</div>`).join('');
   for (let i = 0; i < new Date(mi.y, mi.m-1, 1).getDay(); i++) heat += `<span></span>`;
   for (let d = 1; d <= mi.n; d++) {
-    const ds = `${mi.ym}-${pad(d)}`, act = N - (rcnt[ds] || 0), f = act ? (cnt[ds] || 0) / act : 0, fut = d > mi.elapsed;
+    const ds = `${mi.ym}-${pad(d)}`, act = nDaily - (rcnt[ds] || 0) + (wdone[ds] || 0), f = act ? (cnt[ds] || 0) / act : 0, fut = d > mi.elapsed;
     heat += `<div class="c ${fut ? 'fut' : act === 0 ? 'rs' : f === 0 ? '' : f <= .25 ? 'h1' : f <= .5 ? 'h2' : f <= .75 ? 'h3' : 'h4'}">${d}</div>`;
   }
   // 주차별 · 요일별
   const chunks = [[1,7],[8,14],[15,21],[22,28]].concat(mi.n > 28 ? [[29, mi.n]] : []);
-  const dayAct = d => N - (rcnt[`${mi.ym}-${pad(d)}`] || 0), dayCnt = d => cnt[`${mi.ym}-${pad(d)}`] || 0;
+  const dayAct = d => { const k = `${mi.ym}-${pad(d)}`; return nDaily - (rcnt[k] || 0) + (wdone[k] || 0); }, dayCnt = d => cnt[`${mi.ym}-${pad(d)}`] || 0;
   const weeks = chunks.map(([a,b], i) => { let dn = 0, s = 0; for (let d = a; d <= Math.min(b, mi.elapsed); d++) { dn += dayAct(d); s += dayCnt(d); } return [`${i+1}주`, dn ? Math.round(s / dn * 100) : null]; });
   const wk = DOW.map(() => [0, 0]);
   for (let d = 1; d <= mi.elapsed; d++) { const w = new Date(mi.y, mi.m-1, d).getDay(); wk[w][0] += dayCnt(d); wk[w][1] += dayAct(d); }
@@ -604,20 +676,21 @@ function reportHTML() {
   const bars = arr => `<div class="minibars">${arr.map(([n, v]) => `<div><b>${v === null ? '' : v + '%'}</b><i class="g" style="height:${v ? Math.max(v, 3) * .7 : 2}%"></i>${n}</div>`).join('')}</div>`;
 
   // 습관별
-  const rows = per.map(p => `<div class="hrow"><div><div class="nm">${esc(p.h.emoji)} ${esc(p.h.name)}</div><div class="bar" style="margin-top:6px"><i style="width:${Math.round(p.rate*100)}%"></i></div></div>
-    <div class="rt"><b>${p.n}</b>/${p.eff}일 · ${Math.round(p.rate*100)}%${p.rs ? ` · 🌙${p.rs}` : ''}<br>${deltaHTML(p.prevRate === null ? null : Math.round(p.rate*100) - Math.round(p.prevRate*100))}</div></div>`).join('');
+  const rows = per.map(p => `<div class="hrow"><div><div class="nm">${esc(p.h.emoji)} ${esc(p.h.name)}${p.h.weekly > 0 ? ` · 주 ${p.h.weekly}회` : ''}</div><div class="bar" style="margin-top:6px"><i style="width:${Math.round(p.rate*100)}%"></i></div></div>
+    <div class="rt">${lab(p)} · ${Math.round(p.rate*100)}%${p.rs ? ` · 🌙${p.rs}` : ''}<br>${deltaHTML(p.prevRate === null ? null : Math.round(p.rate*100) - Math.round(p.prevRate*100))}</div></div>`).join('');
 
   // 분석 문장
   const ins = [];
   ins.push(delta === null ? `전체 달성률은 <b>${pct}%</b>예요.` : `전체 달성률은 <b>${pct}%</b>예요. 지난달보다 <b>${delta > 0 ? '+' : ''}${delta}%p</b> ${delta > 0 ? '올랐어요' : delta < 0 ? '내려갔어요' : '같아요'}.`);
   if (totalRest) { const why = [...new Set(hs.flatMap(h => Object.keys(S.rest[h.id] || {}).filter(d => d.startsWith(mi.ym)).map(d => S.rest[h.id][d])))].slice(0, 3).join(', '); ins.push(`🌙 쉬어간 날 ${totalRest}일(습관별 합계)은 달성률 계산에서 뺐어요${why ? ` (${esc(why)})` : ''}.`); }
   const ranked = per.filter(p => p.eff > 0).slice().sort((a,b) => b.rate - a.rate);
-  if (ranked.length > 1 && ranked[0].rate > 0) ins.push(`가장 꾸준한 습관은 <b>${esc(shortName(ranked[0].h))}</b> (${ranked[0].n}/${ranked[0].eff}일)이에요.`);
+  if (ranked.length > 1 && ranked[0].rate > 0) ins.push(`가장 꾸준한 습관은 <b>${esc(shortName(ranked[0].h))}</b> (${plain(ranked[0])})이에요.`);
   const low = ranked[ranked.length-1];
-  if (ranked.length > 1 && low.rate < ranked[0].rate) ins.push(`가장 아쉬운 습관은 <b>${esc(shortName(low.h))}</b> (${low.n}/${low.eff}일)이에요. 다음 달은 이 습관 하나만 더 챙겨 보세요.${low.h.plan ? ` 적어 둔 계획: “${esc(low.h.plan)}”` : ''}`);
+  if (ranked.length > 1 && low.rate < ranked[0].rate) ins.push(`가장 아쉬운 습관은 <b>${esc(shortName(low.h))}</b> (${plain(low)})이에요. 다음 달은 이 습관 하나만 더 챙겨 보세요.${low.h.plan ? ` 적어 둔 계획: “${esc(low.h.plan)}”` : ''}`);
   if (wdRate.length >= 4) { const sw = wdRate.slice().sort((a,b) => a.r - b.r); if (sw[sw.length-1].r > sw[0].r) ins.push(`요일별로는 <b>${sw[0].n}요일</b>(${sw[0].r}%)이 가장 약하고 <b>${sw[sw.length-1].n}요일</b>(${sw[sw.length-1].r}%)이 가장 강해요.`); }
-  const runs = per.map(p => ({ h: p.h, r: longestRun(p.ds, p.h.id) })).sort((a,b) => b.r - a.r);
-  if (runs[0].r >= 3) ins.push(`이번 달 가장 길게 이어진 연속은 <b>${esc(runs[0].h.emoji)} ${runs[0].r}일</b>이에요. 🔥`);
+  const runs = per.filter(p => !(p.h.weekly > 0)).map(p => ({ h: p.h, r: longestRun(p.ds, p.h.id) })).sort((a,b) => b.r - a.r);
+  if (runs.length && runs[0].r >= 3) ins.push(`이번 달 가장 길게 이어진 연속은 <b>${esc(runs[0].h.emoji)} ${runs[0].r}일</b>이에요. 🔥`);
+  per.filter(p => p.h.weekly > 0 && p.wCount).forEach(p => ins.push(`${esc(shortName(p.h))}은 주 ${p.h.weekly}회 목표를 <b>${p.wCount}주 중 ${p.wHit}주</b> 달성했어요.`));
   // 태도
   const avoid = hs.filter(h => h.kind === 'avoid');
   const sl = avoid.flatMap(h => entriesOf(h).filter(e => e.date.startsWith(mi.ym)).map(e => ({ ...e, h })));
@@ -654,7 +727,7 @@ function reportHTML() {
   return nav + `
     <div class="card"><div class="bigrate"><b>${pct}%</b><span>${deltaHTML(delta)}<span class="hint"> 지난달 대비</span></span></div>
       <div class="bar" style="margin:12px 0 8px"><i style="width:${pct}%"></i></div>
-      <div class="hint" style="margin:0">${mi.cur ? `${mi.elapsed}일 경과 · ` : ''}${den}번 중 ${total}번 물을 줬어요${totalRest ? ` (쉬어간 ${totalRest}일 제외)` : ''}. ${verdict}</div></div>
+      <div class="hint" style="margin:0">${mi.cur ? `${mi.elapsed}일 경과 · ` : ''}${Math.round(den)}번 중 ${Math.round(total)}번 물을 줬어요${totalRest ? ` (쉬어간 ${totalRest}일 제외)` : ''}. ${verdict}</div></div>
     <div class="card"><div class="rcard-title">🧠 이번 달 분석</div><ul class="insl">${ins.map(t => `<li>${t}</li>`).join('')}</ul></div>
     <div class="card"><div class="rcard-title">🗓 하루하루 (물 준 습관 수)</div><div class="heat">${heat}</div>
       <div class="hint">진할수록 그날 더 많은 습관을 해냈어요.</div></div>
@@ -704,21 +777,36 @@ function recentListHTML(h) {
   }).join('') + `</div>`;
 }
 
+function weeklyChart(h) {
+  const hist = weekHist(h.id, 12), mx = Math.max(7, ...hist.map(w => w.done));
+  const bars = hist.map(w => `<div><b>${w.target === 0 ? '🌙' : w.done}</b><i class="${w.current ? 'cur' : w.hit ? 'g' : 'n'}" style="height:${Math.max(w.done / mx * 100, 3)}%"></i>${+w.start.slice(5,7)}/${+w.start.slice(8)}</div>`).join('');
+  const done = hist.filter(w => w.target > 0 && (w.ended || w.hit)), hit = done.filter(w => w.hit).length;
+  return `<div class="card ins"><b>📅 주간 횟수 (주 ${h.weekly}회 이상 목표)</b><div class="hint">최근 ${done.length}주 중 ${hit}주 달성 · 초록은 목표를 채운 주, 연한 막대는 이번 주</div><div class="minibars" style="margin-top:12px;height:96px">${bars}</div></div>`;
+}
+
 function streakPanel(h, st) {
-  const today = isDone(h.id, todayStr());
-  const next = MILESTONES.find(m => m > st.cur), prev = [...MILESTONES].reverse().find(m => m <= st.cur) || 0;
-  const head = st.cur > 0
-    ? `🔥 <b>${st.cur}일 연속</b> 중${today ? '' : restOf(h.id, todayStr()) ? ' · 오늘은 쉬어가는 날 🌙' : ` · 오늘 ${h.kind === 'avoid' ? '지키면' : '하면'} ${st.cur+1}일째!`}`
-    : '🔥 오늘부터 새로운 연속 기록을 시작해요';
+  const wk = h.weekly > 0, u = st.unit, list = wk ? WEEK_MS : MILESTONES;
+  const next = list.find(m => m > st.cur), prev = [...list].reverse().find(m => m <= st.cur) || 0;
+  let head;
+  if (wk) {
+    const wi = weekInfo(h.id, wStart(todayStr()));
+    head = st.cur > 0 ? `🔥 <b>${st.cur}주 연속</b> 목표 달성 중 · 이번 주 ${wi.done}/${wi.target || h.weekly}` : `🔥 이번 주 ${wi.done}/${wi.target || h.weekly} · 목표를 채우면 연속이 시작돼요`;
+  } else {
+    const today = isDone(h.id, todayStr());
+    head = st.cur > 0
+      ? `🔥 <b>${st.cur}일 연속</b> 중${today ? '' : restOf(h.id, todayStr()) ? ' · 오늘은 쉬어가는 날 🌙' : ` · 오늘 ${h.kind === 'avoid' ? '지키면' : '하면'} ${st.cur+1}일째!`}`
+      : '🔥 오늘부터 새로운 연속 기록을 시작해요';
+  }
   const bar = next
-    ? `<div class="bar"><i style="width:${st.cur ? Math.round((st.cur - prev) / (next - prev) * 100) : 0}%"></i></div><div style="font-size:12px;margin-top:6px">다음 배지 ${next}일까지 ${next - st.cur}일 남았어요</div>`
+    ? `<div class="bar"><i style="width:${st.cur ? Math.round((st.cur - prev) / (next - prev) * 100) : 0}%"></i></div><div style="font-size:12px;margin-top:6px">다음 배지 ${next}${u}까지 ${next - st.cur}${u} 남았어요</div>`
     : `<div style="font-size:12px;margin-top:6px">모든 배지를 모았어요! 🏆</div>`;
-  return `<div class="streakbox">${head}${bar}<div class="badges">${MILESTONES.map(m => `<span class="badge ${m <= st.best ? 'on' : ''}">${m}일</span>`).join('')}</div></div>`;
+  return `<div class="streakbox">${head}${bar}<div class="badges">${list.map(m => `<span class="badge ${m <= st.best ? 'on' : ''}">${m}${u}</span>`).join('')}</div></div>`;
 }
 
 function detailHTML(h) {
   const days = countDays(h.id), w = wiltLevel(h.id), si = stageIdx(days), st = streaks(h.id);
   const next = STAGES[si+1];
+  const h8 = h.weekly > 0 ? weekHist(h.id, 8).filter(w => w.target > 0 && (w.ended || w.hit)) : [];
   const sub = next ? `다음 단계 「${next[1]}」까지 ${next[0]-days}일` : '500일을 모두 채웠어요! 🎉';
   const [cy, cm] = ui.cal.split('-').map(Number);
   const first = new Date(cy, cm-1, 1), last = new Date(cy, cm, 0).getDate();
@@ -732,15 +820,16 @@ function detailHTML(h) {
   }
   return `
     <div class="sheet-head"><h3>${esc(h.emoji)} ${esc(h.name)}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
-    <div style="max-width:210px;margin:0 auto">${treeSVG(days, w, h.id, st.cur)}</div>
+    <div style="max-width:210px;margin:0 auto">${treeSVG(days, w, h.id, st.unit === '주' ? st.cur * 7 : st.cur)}</div>
     <div class="stage"><div class="nm">${STAGES[si][1]} · ${days} / ${GOAL}일</div>
       <div class="sub">${sub}${w > 0 ? ' · 물이 필요해요 💧' : ''}</div></div>
     <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
     <div class="stats">
-      <div class="stat"><b>${st.cur}일</b><span>현재 연속</span></div>
-      <div class="stat"><b>${st.best}일</b><span>최장 연속</span></div>
-      <div class="stat"><b>${recentRate(h.id)}%</b><span>최근 30일</span></div>
+      <div class="stat"><b>${st.cur}${st.unit}</b><span>현재 연속</span></div>
+      <div class="stat"><b>${st.best}${st.unit}</b><span>최장 연속</span></div>
+      ${h.weekly > 0 ? `<div class="stat"><b>${h8.filter(w => w.hit).length}/${h8.length}주</b><span>최근 8주 달성</span></div>` : `<div class="stat"><b>${recentRate(h.id)}%</b><span>최근 30일</span></div>`}
     </div>
+    ${h.weekly > 0 ? weeklyChart(h) : ''}
     ${streakPanel(h, st)}
     ${insightHTML(h)}
     ${recentListHTML(h)}
@@ -792,7 +881,7 @@ function restSection(h, date) {
 
 function formHTML(h) {
   const isNew = !h;
-  h = h || { emoji:'🌱', name:'', group:'growth', kind:'do', hint:'' };
+  h = h || { emoji:'🌱', name:'', group:'growth', kind:'do', hint:'', weekly:0 };
   return `
     <div class="sheet-head"><h3>${isNew ? '새 나무 심기' : '나무 수정'}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
     <label class="l" for="f-emoji">이모지</label><input type="text" id="f-emoji" maxlength="4" value="${esc(h.emoji)}">
@@ -801,6 +890,9 @@ function formHTML(h) {
     <select id="f-group"><option value="att" ${h.group==='att'?'selected':''}>마음가짐 (태도)</option><option value="growth" ${h.group==='growth'?'selected':''}>자기계발</option></select>
     <label class="l" for="f-kind">기록 방식</label>
     <select id="f-kind"><option value="do" ${h.kind==='do'?'selected':''}>했어요 (하는 습관)</option><option value="avoid" ${h.kind==='avoid'?'selected':''}>지켰어요 (하지 않는 습관)</option></select>
+    <label class="l" for="f-weekly">목표 빈도</label>
+    <select id="f-weekly">${[0,1,2,3,4,5,6].map(k => `<option value="${k}" ${(h.weekly || 0) === k ? 'selected' : ''}>${k ? `주 ${k}회 이상` : '매일'}</option>`).join('')}</select>
+    <div class="hint">운동처럼 매일 하기 어려운 습관은 “주 N회 이상”으로 정하면, 목표를 채운 주를 연속으로 세어요. 한 주는 월~일이에요.</div>
     <label class="l" for="f-hint">기록할 때 묻는 말 (선택)</label>
     <input type="text" id="f-hint" maxlength="80" value="${esc(hintOf(h) === '무엇을 했나요?' && isNew ? '' : (h.hint || ''))}" placeholder="예) 어떤 책을 읽었나요?">
     <div class="btnrow">
@@ -893,13 +985,16 @@ function setDone(id, date, val) {
   if (!val) return false;
   const h = habit(id), msgs = [];
   const after = stageIdx(countDays(id)), s1 = streaks(id).cur;
-  const ms = s1 > s0 && MILESTONES.includes(s1);
+  const wkly = h.weekly > 0, ms = s1 > s0 && (wkly ? WEEK_MS : MILESTONES).includes(s1);
   if (after > before) msgs.push(after === STAGES.length-1 ? `🎉 ${h.emoji} 500일 달성! 거목이 되었어요` : `🌱 ${h.emoji} 「${STAGES[after][1]}」 단계로 자랐어요!`);
-  if (ms) msgs.push(`🔥 ${h.emoji} ${MS_MSG[s1]}`);
+  if (wkly) {
+    if (s1 > s0) msgs.push(ms ? `🔥 ${h.emoji} ${WS_MSG[s1]}` : `🎯 ${h.emoji} 이번 주 목표 달성! ${s1}주 연속`);
+    else if (!msgs.length) { const wi = weekInfo(id, wStart(date)); msgs.push(wi.hit ? `💪 ${h.emoji} 목표를 넘겼어요! 이번 주 ${wi.done}번째` : `🏃 ${h.emoji} 이번 주 ${wi.done}/${wi.target}`); }
+  } else if (ms) msgs.push(`🔥 ${h.emoji} ${MS_MSG[s1]}`);
   else if (s1 > s0 && s1 >= 2 && !msgs.length) msgs.push(`🔥 ${s1}일 연속! 오늘도 이어갔어요`);
   if (!msgs.length) return false;
   toast(msgs.join('\n'), ms || after > before ? 4200 : 2400);
-  if (ms) burst('🔥'); else if (after > before) burst('🌱');
+  if (ms) burst('🔥'); else if (wkly && s1 > s0) burst('🎯'); else if (after > before) burst('🌱');
   return true;
 }
 
@@ -1008,7 +1103,7 @@ document.addEventListener('click', e => {
     case 'editHabit': ui.mode = 'form'; ui.formId = id; setSheet(formHTML(habit(id))); break;
     case 'saveHabit': {
       const name = $('f-name').value.trim(); if (!name) { toast('습관 이름을 입력해 주세요'); break; }
-      const data = { emoji: $('f-emoji').value.trim() || '🌱', name, group: $('f-group').value, kind: $('f-kind').value, hint: $('f-hint').value.trim() };
+      const data = { emoji: $('f-emoji').value.trim() || '🌱', name, group: $('f-group').value, kind: $('f-kind').value, weekly: +$('f-weekly').value, hint: $('f-hint').value.trim() };
       if (id) { Object.assign(habit(id), data); save(); render(); showDetail(id); }
       else { S.habits.push({ id: 'h' + Date.now().toString(36), plan: '', ...data }); save(); render(); closeSheet(); toast('새 나무를 심었어요 🌱'); }
       break;
