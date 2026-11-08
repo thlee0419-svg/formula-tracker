@@ -9,24 +9,31 @@
 <meta name="theme-color" content="#2f8a4d">
 <link rel="manifest" href="habits.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>🌳 습관의 숲</title>
+<title>습관의 숲</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --bg:#f3f5f0; --surface:#fff; --muted-bg:#eceee8; --border:rgba(0,0,0,.1);
     --text:#14170f; --text2:#4d5247; --text3:#868b80;
     --accent:#2f8a4d; --accent-bg:#e4f4ea; --accent-text:#fff;
-    --amber:#b86e00; --amber-bg:#fdf1dc; --red:#d63a2a;
+    --amber:#b86e00; --amber-bg:#fdf1dc; --red:#d63a2a; --red-bg:#fbeae7;
     --ground:#ddd6c3; --trunk:#7a5a3c;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg:#151813; --surface:#20241c; --muted-bg:#2a2f25; --border:rgba(255,255,255,.1);
       --text:#eef0e8; --text2:#b4b9aa; --text3:#7d8275;
       --accent:#5fbf80; --accent-bg:#183222; --accent-text:#0d1a11;
-      --amber:#f0b44c; --amber-bg:#3a2d12; --red:#ff7a6b;
-      --ground:#34382c; --trunk:#a98563;
+      --amber:#f0b44c; --amber-bg:#3a2d12; --red:#ff7a6b; --red-bg:#3a1f1b;
+      --ground:#34382c; --trunk:#a98563; color-scheme:dark;
     }
+  }
+  :root[data-theme="dark"] {
+      --bg:#151813; --surface:#20241c; --muted-bg:#2a2f25; --border:rgba(255,255,255,.1);
+      --text:#eef0e8; --text2:#b4b9aa; --text3:#7d8275;
+      --accent:#5fbf80; --accent-bg:#183222; --accent-text:#0d1a11;
+      --amber:#f0b44c; --amber-bg:#3a2d12; --red:#ff7a6b; --red-bg:#3a1f1b;
+      --ground:#34382c; --trunk:#a98563; color-scheme:dark;
   }
   body { font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; -webkit-text-size-adjust:100%; }
   .container { max-width:680px; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top)) 1rem calc(4rem + env(safe-area-inset-bottom)); }
@@ -35,6 +42,10 @@
   button { font-family:inherit; }
   .icon-btn { background:none; border:none; font-size:22px; cursor:pointer; padding:4px 8px; color:var(--text); }
   .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:1rem; margin-bottom:1rem; }
+
+  .tabs { display:flex; background:var(--muted-bg); border-radius:12px; padding:3px; margin-bottom:.9rem; }
+  .tabs button { flex:1; border:none; background:none; padding:9px 0; font-size:15px; font-weight:600; border-radius:10px; color:var(--text2); cursor:pointer; }
+  .tabs button.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
 
   .daynav { display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:.75rem; }
   .daynav .label { font-size:17px; font-weight:600; min-width:150px; text-align:center; }
@@ -48,28 +59,46 @@
   .bar { height:8px; background:var(--muted-bg); border-radius:99px; overflow:hidden; }
   .bar > i { display:block; height:100%; background:var(--accent); border-radius:99px; transition:width .4s; }
   .summary .sub { display:flex; justify-content:space-between; font-size:13px; color:var(--text3); }
+  .demo { background:var(--amber-bg); color:var(--amber); border-radius:10px; font-size:13px; padding:8px 12px; margin-bottom:.75rem; line-height:1.5; }
 
   h2 { font-size:16px; font-weight:600; margin:1.25rem 0 .6rem; color:var(--text2); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media (min-width:560px) { .grid { grid-template-columns:repeat(3,1fr); } }
-  .hcard { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 10px 12px; display:flex; flex-direction:column; }
+  .hcard { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 10px 12px; display:flex; flex-direction:column; min-width:0; }
   .hcard .hit { cursor:pointer; background:none; border:none; text-align:left; color:inherit; padding:0; }
   .hcard svg { width:100%; height:auto; display:block; }
   .hname { font-size:14px; font-weight:600; line-height:1.35; margin-top:2px; min-height:2.7em; }
   .hmeta { display:flex; justify-content:space-between; align-items:baseline; font-size:12px; color:var(--text3); margin:4px 0 6px; }
   .hmeta b { color:var(--text); font-size:14px; }
   .wilt { font-size:11px; color:var(--amber); background:var(--amber-bg); border-radius:6px; padding:1px 6px; }
-  .check { margin-top:8px; width:100%; border:1.5px solid var(--accent); background:transparent; color:var(--accent); border-radius:10px; font-size:15px; font-weight:600; padding:10px 0; cursor:pointer; }
+  .cdetail { font-size:12px; color:var(--text2); margin-top:8px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-all; }
+  .cdetail.bad { color:var(--red); }
+  .acts { margin-top:auto; padding-top:8px; display:flex; gap:6px; }
+  .check { flex:1; border:1.5px solid var(--accent); background:transparent; color:var(--accent); border-radius:10px; font-size:14px; font-weight:600; padding:10px 2px; cursor:pointer; white-space:nowrap; }
   .check.done { background:var(--accent); color:var(--accent-text); }
+  .check.slip { border-color:var(--red); color:var(--red); }
+  .check.slip.on { background:var(--red); color:#fff; }
+  .check.note { flex:0 0 auto; padding:10px 12px; border-color:var(--border); color:var(--text2); }
   .add { width:100%; margin-top:1.25rem; padding:14px; border:1.5px dashed var(--border); background:none; border-radius:14px; color:var(--text2); font-size:15px; cursor:pointer; }
+
+  /* 일지 */
+  .jfilter { margin-bottom:.8rem; }
+  .jdate { font-size:14px; font-weight:700; color:var(--text2); margin:1.1rem 0 .4rem; }
+  .entry { display:flex; gap:10px; align-items:flex-start; width:100%; text-align:left; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 12px; margin-bottom:6px; cursor:pointer; color:var(--text); }
+  .entry .em { font-size:20px; line-height:1.2; }
+  .entry .tx { min-width:0; flex:1; }
+  .entry .t1 { font-size:14.5px; line-height:1.45; word-break:break-word; }
+  .entry .t2 { font-size:12px; color:var(--text3); margin-top:2px; }
+  .entry.bad .t1 { color:var(--red); }
+  .empty-msg { text-align:center; color:var(--text3); font-size:14px; padding:2rem 0; line-height:1.7; }
 
   /* 시트 */
   #overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:20; }
   #overlay.on { display:block; }
   #sheet { position:fixed; left:0; right:0; bottom:0; max-width:680px; margin:0 auto; max-height:92vh; overflow-y:auto; background:var(--bg); border-radius:18px 18px 0 0; padding:1rem 1rem calc(2rem + env(safe-area-inset-bottom)); z-index:21; display:none; }
   #sheet.on { display:block; }
-  .sheet-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; }
-  .sheet-head h3 { font-size:18px; }
+  .sheet-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; gap:8px; }
+  .sheet-head h3 { font-size:18px; min-width:0; }
   .stage { text-align:center; margin:2px 0 8px; }
   .stage .nm { font-size:18px; font-weight:700; }
   .stage .sub { font-size:13px; color:var(--text3); margin-top:2px; }
@@ -78,9 +107,22 @@
   .stat b { display:block; font-size:19px; }
   .stat span { font-size:12px; color:var(--text3); }
   label.l { display:block; font-size:13px; color:var(--text2); margin:12px 0 6px; font-weight:600; }
-  textarea, input[type=text], select { width:100%; font-size:16px; padding:11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font-family:inherit; }
+  textarea, input[type=text], input[type=number], input[type=time], select { width:100%; font-size:16px; padding:11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font-family:inherit; }
   textarea { resize:vertical; min-height:64px; }
   .hint { font-size:12.5px; color:var(--text3); margin-top:6px; line-height:1.5; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chipbtn { border:1px solid var(--border); background:var(--surface); color:var(--text2); border-radius:99px; font-size:13px; padding:5px 11px; cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .ins { margin-top:14px; }
+  .ins h4 { font-size:14px; margin:14px 0 6px; color:var(--text2); }
+  .rank { display:flex; justify-content:space-between; gap:10px; font-size:14px; padding:7px 0; border-bottom:1px solid var(--border); }
+  .rank:last-child { border-bottom:none; }
+  .rank span:first-child { min-width:0; word-break:break-word; }
+  .rank span:last-child { color:var(--text3); white-space:nowrap; }
+  .minibars { display:flex; gap:8px; align-items:flex-end; height:70px; }
+  .minibars div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; font-size:11px; color:var(--text3); gap:3px; }
+  .minibars i { display:block; width:100%; max-width:34px; background:var(--red); border-radius:4px 4px 0 0; opacity:.8; min-height:2px; }
+  .minibars b { color:var(--text2); font-size:12px; }
   .cal-head { display:flex; justify-content:space-between; align-items:center; margin:14px 0 6px; }
   .cal-head b { font-size:15px; }
   .cal-head button { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:4px 12px; cursor:pointer; color:var(--text); font-size:15px; }
@@ -88,6 +130,7 @@
   .cal .dow { text-align:center; font-size:11px; color:var(--text3); padding-bottom:2px; }
   .cal button { aspect-ratio:1; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; cursor:pointer; }
   .cal button.on { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700; }
+  .cal button.slip { background:var(--red-bg); color:var(--red); border-color:var(--red); font-weight:700; }
   .cal button.today { outline:2px solid var(--accent); outline-offset:-2px; }
   .cal button:disabled { opacity:.3; cursor:default; }
   .cal span.empty { display:block; }
@@ -97,7 +140,13 @@
   .btn.danger { background:transparent; color:var(--red); border:1px solid var(--border); }
   .btnrow { display:flex; gap:8px; margin-top:16px; }
   .btnrow .btn { flex:1; }
-  #toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:11px 18px; border-radius:99px; font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:40; max-width:90vw; text-align:center; }
+  .slipitem { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; background:var(--red-bg); border-radius:10px; padding:9px 12px; margin-top:6px; font-size:14px; line-height:1.45; }
+  .slipitem button { background:none; border:none; color:var(--red); font-size:16px; cursor:pointer; padding:0 4px; }
+  #ask { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:50; padding:1rem; }
+  #ask.on { display:flex; }
+  #ask .box { background:var(--surface); border-radius:14px; padding:1.1rem; max-width:340px; width:100%; }
+  #ask p { font-size:15px; line-height:1.55; }
+  #toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:11px 18px; border-radius:99px; font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:60; max-width:90vw; text-align:center; }
   #toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
   .note { font-size:12.5px; color:var(--text3); line-height:1.6; margin-top:1.5rem; text-align:center; }
 </style>
@@ -108,15 +157,21 @@
     <h1>🌳 습관의 숲</h1>
     <button class="icon-btn" data-act="settings" aria-label="설정">⚙️</button>
   </header>
-  <div class="daynav" id="daynav"></div>
-  <div class="card summary" id="summary"></div>
-  <div id="forest"></div>
-  <button class="add" data-act="newHabit">＋ 새 나무 심기</button>
-  <p class="note">하루를 빠뜨려도 나무는 줄어들지 않아요.<br>500일 동안 한 그루씩, 천천히 키워 가요.</p>
+  <div class="demo" id="demoBanner" hidden>예시 기록으로 채운 체험 화면이에요. 나무를 눌러 보고 ⚙️ 설정에서 초기화하면 빈 숲에서 시작해요.</div>
+  <div class="tabs" id="tabs"></div>
+  <div id="viewForest">
+    <div class="daynav" id="daynav"></div>
+    <div class="card summary" id="summary"></div>
+    <div id="forest"></div>
+    <button class="add" data-act="newHabit">＋ 새 나무 심기</button>
+    <p class="note">하루를 빠뜨려도 나무는 줄어들지 않아요.<br>500일 동안 한 그루씩, 천천히 키워 가요.</p>
+  </div>
+  <div id="viewJournal" hidden></div>
 </div>
 
 <div id="overlay" data-act="close"></div>
 <div id="sheet" role="dialog" aria-modal="true"></div>
+<div id="ask"></div>
 <div id="toast"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
 
@@ -128,15 +183,15 @@ const GROUPS = { att: '🧘 마음가짐 (태도)', growth: '🌱 자기계발' 
 const STAGES = [[0,'씨앗'],[1,'새싹'],[7,'어린 싹'],[30,'묘목'],[100,'젊은 나무'],[250,'든든한 나무'],[500,'거목']];
 
 const DEFAULTS = [
-  { id:'yt',       emoji:'📵', name:'남는 시간에 습관적으로 유튜브 보지 않기', group:'att', kind:'avoid', plan:'남는 시간이 생기면 → 유튜브 대신 책을 펴고 한 페이지만 읽기' },
-  { id:'calm',     emoji:'🌿', name:'어떤 순간에도 짜증내지 않기', group:'att', kind:'avoid', plan:'짜증이 올라오면 → 숨을 천천히 세 번 쉬고, 한 템포 뒤에 말하기' },
-  { id:'soft',     emoji:'🕊️', name:'반대 의견에도 말을 빨리 하거나 언성 높이지 않기', group:'att', kind:'avoid', plan:'반대 의견을 들으면 → 끝까지 듣고, 천천히 한 문장으로 되묻기' },
-  { id:'read',     emoji:'📚', name:'하루 30분 독서', group:'growth', kind:'do', plan:'' },
-  { id:'piano',    emoji:'🎹', name:'피아노 연습', group:'growth', kind:'do', plan:'' },
-  { id:'workout',  emoji:'🏃', name:'운동 (헬스·러닝)', group:'growth', kind:'do', plan:'' },
-  { id:'english',  emoji:'🦉', name:'영어 공부 (Duolingo)', group:'growth', kind:'do', plan:'' },
-  { id:'stock',    emoji:'📈', name:'주식 공부', group:'growth', kind:'do', plan:'' },
-  { id:'research', emoji:'🎓', name:'교육 관련 연구', group:'growth', kind:'do', plan:'' },
+  { id:'yt',       emoji:'📵', name:'남는 시간에 습관적으로 유튜브 보지 않기', group:'att', kind:'avoid', plan:'남는 시간이 생기면 → 유튜브 대신 책을 펴고 한 페이지만 읽기', hint:'어떤 상황에서 유튜브를 봤나요? (예: 퇴근 후 침대에서 무심코)' },
+  { id:'calm',     emoji:'🌿', name:'어떤 순간에도 짜증내지 않기', group:'att', kind:'avoid', plan:'짜증이 올라오면 → 숨을 천천히 세 번 쉬고, 한 템포 뒤에 말하기', hint:'무엇 때문에, 어떤 상황에서 짜증이 났나요?' },
+  { id:'soft',     emoji:'🕊️', name:'반대 의견에도 말을 빨리 하거나 언성 높이지 않기', group:'att', kind:'avoid', plan:'반대 의견을 들으면 → 끝까지 듣고, 천천히 한 문장으로 되묻기', hint:'누구와, 어떤 대화에서 그랬나요?' },
+  { id:'read',     emoji:'📚', name:'하루 30분 독서', group:'growth', kind:'do', plan:'', hint:'어떤 책을 읽었나요? (제목, 읽은 쪽수)' },
+  { id:'piano',    emoji:'🎹', name:'피아노 연습', group:'growth', kind:'do', plan:'', hint:'무엇을 연습했나요? (곡명, 연습한 부분)' },
+  { id:'workout',  emoji:'🏃', name:'운동 (헬스·러닝)', group:'growth', kind:'do', plan:'', hint:'어떤 운동을 했나요? (예: 러닝 5km, 헬스 하체)' },
+  { id:'english',  emoji:'🦉', name:'영어 공부 (Duolingo)', group:'growth', kind:'do', plan:'', hint:'Duolingo 외에 한 것이 있나요? (예: 레슨 3개, 영어 기사)' },
+  { id:'stock',    emoji:'📈', name:'주식 공부', group:'growth', kind:'do', plan:'', hint:'무엇을 공부했나요? (종목, 주제, 읽은 자료)' },
+  { id:'research', emoji:'🎓', name:'교육 관련 연구', group:'growth', kind:'do', plan:'', hint:'어떤 연구를 했나요? (주제, 읽은 논문·자료)' },
 ];
 
 /* ---------- 날짜 도우미 ---------- */
@@ -148,25 +203,35 @@ const addDays = (s,n) => { const d = parse(s); d.setDate(d.getDate()+n); return 
 const diff = (a,b) => Math.round((parse(a)-parse(b))/864e5);
 const DOW = ['일','월','화','수','목','금','토'];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function dateLabel(s) { const d = parse(s); return `${d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + '년 ' : ''}${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`; }
+const nowHM = () => { const n = new Date(); return `${pad(n.getHours())}:${pad(n.getMinutes())}`; };
 
 /* ---------- 저장소 ---------- */
 let S = load();
 function load() {
   try {
     const j = JSON.parse(localStorage.getItem(KEY));
-    if (j && Array.isArray(j.habits) && j.log && typeof j.log === 'object') return j;
+    if (j && Array.isArray(j.habits) && j.log && typeof j.log === 'object') return norm(j);
   } catch (e) {}
-  return { habits: DEFAULTS.map(d => ({...d})), log: {} };
+  return blank();
 }
+function norm(j) { j.notes = j.notes || {}; j.slips = j.slips || {}; return j; }
+function blank() { return { habits: DEFAULTS.map(d => ({...d})), log: {}, notes: {}, slips: {} }; }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { toast('저장에 실패했어요. 저장 공간을 확인해 주세요'); }
 }
 
-/* ---------- 통계 ---------- */
+/* ---------- 기록 접근 ---------- */
 const doneDates = id => Object.keys(S.log[id] || {}).filter(k => S.log[id][k]).sort();
 const countDays = id => doneDates(id).length;
 const isDone = (id, date) => !!(S.log[id] && S.log[id][date]);
+const noteOf = (id, date) => (S.notes[id] && S.notes[id][date]) || null;
+const slipsOf = (id, date) => (S.slips[id] && S.slips[id][date]) || [];
+const habit = id => S.habits.find(h => h.id === id);
+const hintOf = h => h.hint || (DEFAULTS.find(d => d.id === h.id) || {}).hint || (h.kind === 'avoid' ? '어떤 상황이었나요?' : '무엇을 했나요?');
+const normKey = t => t.trim().replace(/\s+/g,' ').toLowerCase();
+
 function stageIdx(days) { let i = 0; STAGES.forEach((s,k) => { if (days >= s[0]) i = k; }); return i; }
 function wiltLevel(id) {
   const ds = doneDates(id);
@@ -187,6 +252,28 @@ function recentRate(id) {
   const set = new Set(doneDates(id)); let n = 0, t = todayStr();
   for (let i = 0; i < 30; i++) if (set.has(addDays(t,-i))) n++;
   return Math.round(n/30*100);
+}
+// 습관 하나의 상세 기록(하는 습관: 한 일, 하지 않는 습관: 못 지킨 상황), 최신순
+function entriesOf(h) {
+  const out = [];
+  if (h.kind === 'avoid') {
+    const sl = S.slips[h.id] || {};
+    Object.keys(sl).forEach(d => sl[d].forEach((s, i) => out.push({ date:d, t:s.t, at:s.at, i })));
+  } else {
+    const n = S.notes[h.id] || {};
+    Object.keys(n).forEach(d => { if (isDone(h.id, d)) out.push({ date:d, t:n[d].t, m:n[d].m }); });
+  }
+  return out.sort((a,b) => b.date.localeCompare(a.date) || (b.at || '').localeCompare(a.at || ''));
+}
+function freq(list) {
+  const m = new Map();
+  list.forEach(e => { if (!e.t) return; const k = normKey(e.t); const o = m.get(k) || { t:e.t, n:0, min:0 }; o.n++; o.min += e.m || 0; m.set(k, o); });
+  return [...m.values()].sort((a,b) => b.n - a.n).slice(0, 6);
+}
+function recentTexts(h) {
+  const seen = new Set(), out = [];
+  for (const e of entriesOf(h)) { if (!e.t) continue; const k = normKey(e.t); if (!seen.has(k)) { seen.add(k); out.push(e.t); } if (out.length >= 6) break; }
+  return out;
 }
 
 /* ---------- 나무 그리기 ---------- */
@@ -256,10 +343,18 @@ function treeSVG(days, wilt, key) {
 }
 
 /* ---------- 화면 ---------- */
-const ui = { date: todayStr(), open: null, mode: null, cal: todayStr().slice(0,7), formId: null };
+const ui = { tab: 'forest', date: todayStr(), open: null, mode: null, cal: todayStr().slice(0,7), formId: null, day: null, jf: 'all', jl: 30 };
 const $ = id => document.getElementById(id);
 
 function render() {
+  $('demoBanner').hidden = !S.demo;
+  $('tabs').innerHTML =
+    `<button class="${ui.tab === 'forest' ? 'on' : ''}" data-act="tab" data-id="forest">🌳 숲</button>` +
+    `<button class="${ui.tab === 'journal' ? 'on' : ''}" data-act="tab" data-id="journal">📒 일지</button>`;
+  $('viewForest').hidden = ui.tab !== 'forest';
+  $('viewJournal').hidden = ui.tab !== 'journal';
+  if (ui.tab === 'journal') { $('viewJournal').innerHTML = journalHTML(); return; }
+
   const t = todayStr(), vd = ui.date;
   const dd = parse(vd);
   const label = `${dd.getMonth()+1}월 ${dd.getDate()}일 (${DOW[dd.getDay()]})`;
@@ -287,31 +382,109 @@ function render() {
   $('forest').innerHTML = html;
 }
 
-function checkLabel(h, done) { return h.kind === 'avoid' ? (done ? '✓ 지켰어요' : '지켰나요?') : (done ? '✓ 했어요' : '했나요?'); }
-
 function card(h, vd) {
   const days = countDays(h.id), w = wiltLevel(h.id), done = isDone(h.id, vd);
+  const id = esc(h.id);
+  let detail = '', acts = '';
+  if (h.kind === 'avoid') {
+    const sl = slipsOf(h.id, vd);
+    if (sl.length) detail = `<div class="cdetail bad">✗ ${sl.length}회 · ${esc(sl[sl.length-1].t)}</div>`;
+    acts = `<button class="check ${done ? 'done' : ''}" data-act="toggle" data-id="${id}">${done ? '✓ 지켰어요' : '지켰어요'}</button>` +
+           `<button class="check slip ${sl.length ? 'on' : ''}" data-act="slip" data-id="${id}">${sl.length ? `못 지킴 ${sl.length}` : '못 지켰어요'}</button>`;
+  } else {
+    const n = noteOf(h.id, vd);
+    if (done && n && (n.t || n.m)) detail = `<div class="cdetail">${esc(n.t || '')}${n.m ? ` · ${n.m}분` : ''}</div>`;
+    acts = `<button class="check ${done ? 'done' : ''}" data-act="toggle" data-id="${id}">${done ? '✓ 했어요' : '했나요?'}</button>` +
+           (done ? `<button class="check note" data-act="editDay" data-id="${id}" data-date="${vd}" aria-label="내용 적기">✎</button>` : '');
+  }
   return `<div class="hcard">
-    <button class="hit" data-act="open" data-id="${esc(h.id)}">
+    <button class="hit" data-act="open" data-id="${id}">
       ${treeSVG(days, w, h.id)}
       <div class="hname">${esc(h.emoji)} ${esc(h.name)}</div>
     </button>
     <div class="hmeta"><span><b>${days}</b> / ${GOAL}일</span>${w > 0 ? '<span class="wilt">시들어가요</span>' : `<span>${STAGES[stageIdx(days)][1]}</span>`}</div>
     <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
-    <button class="check ${done ? 'done' : ''}" data-act="toggle" data-id="${esc(h.id)}">${checkLabel(h, done)}</button>
+    ${detail}
+    <div class="acts">${acts}</div>
   </div>`;
+}
+
+/* ---------- 일지 ---------- */
+function journalHTML() {
+  const hs = S.habits.filter(h => ui.jf === 'all' || h.id === ui.jf);
+  const byDate = {};
+  const push = (d, o) => (byDate[d] = byDate[d] || []).push(o);
+  hs.forEach(h => {
+    doneDates(h.id).forEach(d => push(d, { h, kind:'done', n: noteOf(h.id, d), d }));
+    const sl = S.slips[h.id] || {};
+    Object.keys(sl).forEach(d => sl[d].forEach(s => push(d, { h, kind:'slip', s, d })));
+  });
+  const dates = Object.keys(byDate).sort().reverse();
+  const shown = dates.slice(0, ui.jl);
+  const opts = `<option value="all">전체 습관</option>` + S.habits.map(h => `<option value="${esc(h.id)}" ${ui.jf === h.id ? 'selected' : ''}>${esc(h.emoji)} ${esc(h.name)}</option>`).join('');
+  let out = `<div class="jfilter"><select data-jf="1" aria-label="습관 선택">${opts}</select></div>`;
+  if (!dates.length) return out + `<div class="empty-msg">아직 기록이 없어요.<br>숲 화면에서 물을 주고 내용을 적으면 여기에 날짜별로 쌓여요.</div>`;
+  shown.forEach(d => {
+    out += `<div class="jdate">${dateLabel(d)}</div>`;
+    byDate[d].sort((a,b) => (a.kind === b.kind ? 0 : a.kind === 'slip' ? 1 : -1)).forEach(e => {
+      const hid = esc(e.h.id);
+      if (e.kind === 'slip') {
+        out += `<button class="entry bad" data-act="editDay" data-id="${hid}" data-date="${d}"><span class="em">${esc(e.h.emoji)}</span><span class="tx"><div class="t1">✗ ${esc(e.s.t)}${e.s.at ? ` (${e.s.at})` : ''}</div><div class="t2">${esc(e.h.name)}</div></span></button>`;
+      } else {
+        const main = e.h.kind === 'avoid' ? '✓ 지켰어요' : (e.n && (e.n.t || e.n.m) ? `${esc(e.n.t || '했어요')}${e.n.m ? ` · ${e.n.m}분` : ''}` : '했어요');
+        out += `<button class="entry" data-act="editDay" data-id="${hid}" data-date="${d}"><span class="em">${esc(e.h.emoji)}</span><span class="tx"><div class="t1">${main}</div><div class="t2">${esc(e.h.name)}</div></span></button>`;
+      }
+    });
+  });
+  if (dates.length > shown.length) out += `<button class="add" data-act="moreJournal">이전 기록 더 보기</button>`;
+  return out;
 }
 
 /* ---------- 시트 ---------- */
 function openSheet() { $('overlay').classList.add('on'); $('sheet').classList.add('on'); }
-function closeSheet() { $('overlay').classList.remove('on'); $('sheet').classList.remove('on'); ui.open = null; ui.mode = null; }
+function closeSheet() { $('overlay').classList.remove('on'); $('sheet').classList.remove('on'); ui.open = null; ui.mode = null; ui.day = null; }
 function setSheet(html) { const sh = $('sheet'), top = sh.scrollTop; sh.innerHTML = html; sh.scrollTop = top; openSheet(); }
+const chipsHTML = (list, target) => list.length ? `<div class="chips">${list.map(t => `<button class="chipbtn" data-act="useChip" data-target="${target}" data-val="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : '';
+
+function insightHTML(h) {
+  const es = entriesOf(h);
+  if (h.kind === 'avoid') {
+    const t30 = addDays(todayStr(), -29);
+    const n30 = es.filter(e => e.date >= t30).length;
+    let html = `<div class="card ins"><b>📊 못 지킨 기록 정리</b>
+      <div class="hint">전체 ${es.length}회 · 최근 30일 ${n30}회</div>`;
+    if (!es.length) return html + `<div class="hint">아직 기록이 없어요. 못 지킨 날 상황을 적어 두면 패턴이 보여요.</div></div>`;
+    const top = freq(es);
+    if (top.length) html += `<h4>자주 나온 상황</h4>` + top.map(o => `<div class="rank"><span>${esc(o.t)}</span><span>${o.n}회</span></div>`).join('');
+    const buckets = [['새벽',0,5],['아침',6,11],['오후',12,17],['저녁',18,23]].map(([n,a,b]) => [n, es.filter(e => e.at && +e.at.slice(0,2) >= a && +e.at.slice(0,2) <= b).length]);
+    if (buckets.some(b => b[1])) { const mx = Math.max(...buckets.map(b => b[1])); html += `<h4>시간대</h4><div class="minibars">${buckets.map(([n,c]) => `<div><b>${c}</b><i style="height:${c/mx*70}%"></i>${n}</div>`).join('')}</div>`; }
+    const wd = DOW.map((n,i) => [n, es.filter(e => parse(e.date).getDay() === i).length]);
+    const wmx = Math.max(...wd.map(w => w[1]));
+    if (wmx) html += `<h4>요일</h4><div class="minibars">${wd.map(([n,c]) => `<div><b>${c}</b><i style="height:${c/wmx*70}%"></i>${n}</div>`).join('')}</div>`;
+    return html + `</div>`;
+  }
+  const withText = es.filter(e => e.t);
+  const totalMin = es.reduce((a,e) => a + (e.m || 0), 0);
+  let html = `<div class="card ins"><b>📊 한 일 정리</b>
+    <div class="hint">내용을 적은 날 ${withText.length}일${totalMin ? ` · 기록한 시간 합계 ${totalMin}분 (${(totalMin/60).toFixed(1)}시간)` : ''}</div>`;
+  if (!withText.length) return html + `<div class="hint">아직 적은 내용이 없어요. 물을 준 뒤 한 일을 적어 두면 여기에 정리돼요.</div></div>`;
+  html += `<h4>자주 한 것</h4>` + freq(es).map(o => `<div class="rank"><span>${esc(o.t)}</span><span>${o.n}일${o.min ? ` · ${o.min}분` : ''}</span></div>`).join('');
+  return html + `</div>`;
+}
+
+function recentListHTML(h) {
+  const es = entriesOf(h).slice(0, 12);
+  if (!es.length) return '';
+  return `<div class="ins"><b style="font-size:14px;color:var(--text2)">최근 기록</b>` + es.map(e => {
+    const txt = h.kind === 'avoid' ? `✗ ${esc(e.t)}${e.at ? ` (${e.at})` : ''}` : `${esc(e.t || '(내용 없음)')}${e.m ? ` · ${e.m}분` : ''}`;
+    return `<button class="entry ${h.kind === 'avoid' ? 'bad' : ''}" style="margin-top:6px" data-act="editDay" data-id="${esc(h.id)}" data-date="${e.date}"><span class="tx"><div class="t1">${txt}</div><div class="t2">${dateLabel(e.date)}</div></span></button>`;
+  }).join('') + `</div>`;
+}
 
 function detailHTML(h) {
   const days = countDays(h.id), w = wiltLevel(h.id), si = stageIdx(days), st = streaks(h.id);
   const next = STAGES[si+1];
   const sub = next ? `다음 단계 「${next[1]}」까지 ${next[0]-days}일` : '500일을 모두 채웠어요! 🎉';
-  // 달력
   const [cy, cm] = ui.cal.split('-').map(Number);
   const first = new Date(cy, cm-1, 1), last = new Date(cy, cm, 0).getDate();
   const t = todayStr();
@@ -319,7 +492,8 @@ function detailHTML(h) {
   for (let i = 0; i < first.getDay(); i++) cells += `<span class="empty"></span>`;
   for (let d = 1; d <= last; d++) {
     const ds = `${cy}-${pad(cm)}-${pad(d)}`;
-    cells += `<button class="${isDone(h.id, ds) ? 'on' : ''} ${ds === t ? 'today' : ''}" data-act="calToggle" data-date="${ds}" ${ds > t ? 'disabled' : ''}>${d}</button>`;
+    const cls = isDone(h.id, ds) ? 'on' : (slipsOf(h.id, ds).length ? 'slip' : '');
+    cells += `<button class="${cls} ${ds === t ? 'today' : ''}" data-act="editDay" data-id="${esc(h.id)}" data-date="${ds}" ${ds > t ? 'disabled' : ''}>${d}</button>`;
   }
   return `
     <div class="sheet-head"><h3>${esc(h.emoji)} ${esc(h.name)}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
@@ -332,18 +506,48 @@ function detailHTML(h) {
       <div class="stat"><b>${st.best}일</b><span>최장 연속</span></div>
       <div class="stat"><b>${recentRate(h.id)}%</b><span>최근 30일</span></div>
     </div>
+    ${insightHTML(h)}
+    ${recentListHTML(h)}
     <label class="l" for="plan">나만의 실천 계획 (If → Then)</label>
     <textarea id="plan" data-plan="${esc(h.id)}" placeholder="예) 저녁 식사를 마치면 → 책상에 앉아 타이머 30분 켜기">${esc(h.plan || '')}</textarea>
     <div class="hint">“언제/어떤 상황이면 → 무엇을 한다”처럼 구체적으로 적어 두면 실천이 쉬워져요.</div>
     <div class="cal-head"><button data-act="calPrev">◀</button><b>${cy}년 ${cm}월</b><button data-act="calNext" ${ui.cal >= t.slice(0,7) ? 'disabled' : ''}>▶</button></div>
     <div class="cal">${cells}</div>
-    <div class="hint">날짜를 누르면 지난 기록도 고치거나 채울 수 있어요.</div>
+    <div class="hint">날짜를 누르면 그날 기록을 보거나 고칠 수 있어요.${h.kind === 'avoid' ? ' (빨간 칸은 못 지킨 날)' : ''}</div>
     <div class="btnrow"><button class="btn ghost" data-act="editHabit" data-id="${esc(h.id)}">✏️ 나무 수정</button></div>`;
+}
+
+function dayHTML(h, date) {
+  const done = isDone(h.id, date), id = esc(h.id);
+  let b = `<div class="sheet-head"><h3>${esc(h.emoji)} ${dateLabel(date)}</h3><button class="icon-btn" data-act="closeDay" aria-label="닫기">✕</button></div>
+    <div class="hint" style="margin:0 0 6px">${esc(h.name)}</div>`;
+  if (h.kind === 'avoid') {
+    const sl = slipsOf(h.id, date);
+    b += `<div class="btnrow" style="margin-top:8px"><button class="btn ${done ? 'primary' : 'ghost'}" data-act="dayKeep">${done ? '✓ 오늘 지켰어요' : '지켰어요로 표시'}</button></div>`;
+    b += `<label class="l">못 지킨 기록 ${sl.length ? `(${sl.length}회)` : ''}</label>`;
+    b += sl.map((s, i) => `<div class="slipitem"><span>${s.at ? `<b>${s.at}</b> · ` : ''}${esc(s.t)}</span><button data-act="delSlip" data-i="${i}" aria-label="삭제">✕</button></div>`).join('');
+    b += `<label class="l" for="s-text">${sl.length ? '또 있었다면 추가' : '못 지켰다면 상황을 적어 두세요'}</label>
+      <textarea id="s-text" placeholder="${esc(hintOf(h))}"></textarea>
+      ${chipsHTML(recentTexts(h), 's-text')}
+      <label class="l" for="s-time">시각</label>
+      <input type="time" id="s-time" value="${date === todayStr() ? nowHM() : ''}">
+      <div class="btnrow"><button class="btn danger" data-act="addSlip">못 지켰어요 기록</button></div>
+      <div class="hint">못 지킨 날로 기록하면 그날은 ‘지킨 날’에서 빠져요. 나무가 줄어들지는 않아요.</div>`;
+  } else {
+    const n = noteOf(h.id, date) || {};
+    b += `<label class="l" for="d-text">한 일</label>
+      <textarea id="d-text" placeholder="${esc(hintOf(h))}">${esc(n.t || '')}</textarea>
+      ${chipsHTML(recentTexts(h), 'd-text')}
+      <label class="l" for="d-min">걸린 시간 (분, 선택)</label>
+      <input type="number" id="d-min" inputmode="numeric" min="0" max="1440" value="${n.m || ''}" placeholder="예) 30">
+      <div class="btnrow">${done ? `<button class="btn danger" data-act="clearDay">기록 지우기</button>` : ''}<button class="btn primary" data-act="saveDay">${done ? '저장' : '했어요로 저장'}</button></div>`;
+  }
+  return b;
 }
 
 function formHTML(h) {
   const isNew = !h;
-  h = h || { emoji:'🌱', name:'', group:'growth', kind:'do' };
+  h = h || { emoji:'🌱', name:'', group:'growth', kind:'do', hint:'' };
   return `
     <div class="sheet-head"><h3>${isNew ? '새 나무 심기' : '나무 수정'}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
     <label class="l" for="f-emoji">이모지</label><input type="text" id="f-emoji" maxlength="4" value="${esc(h.emoji)}">
@@ -352,6 +556,8 @@ function formHTML(h) {
     <select id="f-group"><option value="att" ${h.group==='att'?'selected':''}>마음가짐 (태도)</option><option value="growth" ${h.group==='growth'?'selected':''}>자기계발</option></select>
     <label class="l" for="f-kind">기록 방식</label>
     <select id="f-kind"><option value="do" ${h.kind==='do'?'selected':''}>했어요 (하는 습관)</option><option value="avoid" ${h.kind==='avoid'?'selected':''}>지켰어요 (하지 않는 습관)</option></select>
+    <label class="l" for="f-hint">기록할 때 묻는 말 (선택)</label>
+    <input type="text" id="f-hint" maxlength="80" value="${esc(hintOf(h) === '무엇을 했나요?' && isNew ? '' : (h.hint || ''))}" placeholder="예) 어떤 책을 읽었나요?">
     <div class="btnrow">
       ${isNew ? '' : `<button class="btn danger" data-act="deleteHabit" data-id="${esc(h.id)}">삭제</button>`}
       <button class="btn primary" data-act="saveHabit" data-id="${isNew ? '' : esc(h.id)}">${isNew ? '심기' : '저장'}</button>
@@ -363,7 +569,7 @@ function settingsHTML() {
     <div class="sheet-head"><h3>⚙️ 설정</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
     <div class="card" style="margin-top:8px">
       <b>기록 백업</b>
-      <div class="hint">기록은 이 기기의 브라우저에만 저장돼요. 브라우저 데이터를 지우면 사라지니, 가끔 백업 파일을 내려받아 두세요.</div>
+      <div class="hint">기록은 이 기기의 브라우저에만 저장돼요. 브라우저 데이터를 지우면 사라지니, 가끔 백업 파일을 내려받아 두세요. (한 일·못 지킨 상황 기록도 함께 담겨요)</div>
       <div class="btnrow"><button class="btn ghost" data-act="export">내보내기</button><button class="btn ghost" data-act="import">불러오기</button></div>
     </div>
     <div class="card">
@@ -374,35 +580,110 @@ function settingsHTML() {
 }
 
 function showDetail(id) {
-  const h = S.habits.find(x => x.id === id); if (!h) return closeSheet();
-  ui.open = id; ui.mode = 'detail'; setSheet(detailHTML(h));
+  const h = habit(id); if (!h) return closeSheet();
+  ui.open = id; ui.mode = 'detail'; ui.day = null; setSheet(detailHTML(h));
 }
+function showDay(id, date, focus) {
+  const h = habit(id); if (!h) return;
+  ui.mode = 'day'; ui.day = { id, date };
+  setSheet(dayHTML(h, date));
+  if (focus) setTimeout(() => { const i = $(h.kind === 'avoid' ? 's-text' : 'd-text'); if (i) i.focus(); }, 60);
+}
+function closeDay() { ui.day = null; if (ui.open) showDetail(ui.open); else closeSheet(); }
 
 /* ---------- 동작 ---------- */
 let toastTimer;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); }
 
+let pendingAsk = null;
+function ask(msg, yes) {
+  pendingAsk = yes;
+  $('ask').innerHTML = `<div class="box"><p>${esc(msg)}</p><div class="btnrow"><button class="btn ghost" data-act="askNo">취소</button><button class="btn primary" data-act="askYes">확인</button></div></div>`;
+  $('ask').classList.add('on');
+}
+
+// 반환값: 단계가 올라갔으면 true
 function setDone(id, date, val) {
   const before = stageIdx(countDays(id));
   S.log[id] = S.log[id] || {};
-  if (val) S.log[id][date] = 1; else delete S.log[id][date];
+  if (val) {
+    S.log[id][date] = 1;
+    if (S.slips[id]) delete S.slips[id][date];          // 지킨 날로 바꾸면 못 지킨 기록은 지워짐
+  } else {
+    delete S.log[id][date];
+    if (S.notes[id]) delete S.notes[id][date];          // 안 한 날로 바꾸면 적은 내용도 지워짐
+  }
   save();
   const after = stageIdx(countDays(id));
   if (val && after > before) {
-    const h = S.habits.find(x => x.id === id);
+    const h = habit(id);
     toast(after === STAGES.length-1 ? `🎉 ${h.emoji} 500일 달성! 거목이 되었어요` : `🌱 ${h.emoji} 「${STAGES[after][1]}」 단계로 자랐어요!`);
-  } else if (val) {
-    toast('물을 줬어요 💧');
+    return true;
   }
+  return false;
 }
 
-function refresh() { render(); if (ui.mode === 'detail' && ui.open) showDetail(ui.open); }
+function refresh() {
+  render();
+  if (ui.mode === 'detail' && ui.open) showDetail(ui.open);
+  else if (ui.mode === 'day' && ui.day) showDay(ui.day.id, ui.day.date);
+}
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const act = el.dataset.act, id = el.dataset.id;
   switch (act) {
-    case 'toggle': setDone(id, ui.date, !isDone(id, ui.date)); render(); break;
+    case 'tab': ui.tab = id; render(); break;
+    case 'toggle': {
+      const h = habit(id), date = ui.date, on = !isDone(id, date);
+      if (on) {
+        const sl = slipsOf(id, date).length;
+        const doIt = () => { setDone(id, date, true); render(); if (h.kind === 'do') showDay(id, date, true); };
+        if (sl) ask(`이날 못 지킨 기록 ${sl}건이 지워져요. 지켰어요로 바꿀까요?`, doIt); else doIt();
+      } else {
+        const hasNote = h.kind === 'do' && noteOf(id, date);
+        const undo = () => { setDone(id, date, false); render(); };
+        if (hasNote) ask('적어 둔 내용도 함께 지워져요. 취소할까요?', undo); else undo();
+      }
+      break;
+    }
+    case 'slip': showDay(id, ui.date, true); break;
+    case 'editDay': showDay(id, el.dataset.date, false); break;
+    case 'closeDay': closeDay(); break;
+    case 'useChip': { const t = $(el.dataset.target); if (t) { t.value = el.dataset.val; t.focus(); } break; }
+    case 'saveDay': {
+      const { id: hid, date } = ui.day;
+      const t = $('d-text').value.trim(), mv = $('d-min').value;
+      const m = mv ? Math.max(0, Math.min(1440, parseInt(mv, 10) || 0)) : 0;
+      const up = setDone(hid, date, true);
+      S.notes[hid] = S.notes[hid] || {};
+      if (t || m) S.notes[hid][date] = { t, m: m || undefined }; else delete S.notes[hid][date];
+      save(); render(); closeDay(); if (!up) toast('기록했어요 ✍️');
+      break;
+    }
+    case 'clearDay': { const { id: hid, date } = ui.day; setDone(hid, date, false); render(); closeDay(); toast('기록을 지웠어요'); break; }
+    case 'dayKeep': {
+      const { id: hid, date } = ui.day, on = !isDone(hid, date), sl = slipsOf(hid, date).length;
+      const go = () => { setDone(hid, date, on); refresh(); render(); };
+      if (on && sl) ask(`이날 못 지킨 기록 ${sl}건이 지워져요. 지켰어요로 바꿀까요?`, go); else go();
+      break;
+    }
+    case 'addSlip': {
+      const { id: hid, date } = ui.day;
+      const t = $('s-text').value.trim(); if (!t) { toast('어떤 상황이었는지 간단히 적어 주세요'); break; }
+      const at = $('s-time').value || '';
+      S.slips[hid] = S.slips[hid] || {}; (S.slips[hid][date] = S.slips[hid][date] || []).push({ t, at });
+      if (S.log[hid]) delete S.log[hid][date];          // 못 지킨 날은 지킨 날에서 빠짐
+      save(); render(); showDay(hid, date); toast('기록했어요. 다음엔 더 잘 지킬 수 있어요 🌱');
+      break;
+    }
+    case 'delSlip': {
+      const { id: hid, date } = ui.day, i = +el.dataset.i;
+      S.slips[hid][date].splice(i, 1); if (!S.slips[hid][date].length) delete S.slips[hid][date];
+      save(); render(); showDay(hid, date);
+      break;
+    }
+    case 'moreJournal': ui.jl += 30; render(); break;
     case 'open': ui.cal = ui.date.slice(0,7); showDetail(id); break;
     case 'close': closeSheet(); break;
     case 'prevDay': ui.date = addDays(ui.date,-1); render(); break;
@@ -410,21 +691,22 @@ document.addEventListener('click', e => {
     case 'goToday': ui.date = todayStr(); render(); break;
     case 'calPrev': { const [y,m] = ui.cal.split('-').map(Number); const d = new Date(y, m-2, 1); ui.cal = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; showDetail(ui.open); break; }
     case 'calNext': { const [y,m] = ui.cal.split('-').map(Number); const d = new Date(y, m, 1); const nx = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; if (nx <= todayStr().slice(0,7)) { ui.cal = nx; showDetail(ui.open); } break; }
-    case 'calToggle': { const date = el.dataset.date; if (date > todayStr()) break; setDone(ui.open, date, !isDone(ui.open, date)); refresh(); break; }
     case 'newHabit': ui.mode = 'form'; ui.formId = null; setSheet(formHTML(null)); break;
-    case 'editHabit': ui.mode = 'form'; ui.formId = id; setSheet(formHTML(S.habits.find(x => x.id === id))); break;
+    case 'editHabit': ui.mode = 'form'; ui.formId = id; setSheet(formHTML(habit(id))); break;
     case 'saveHabit': {
       const name = $('f-name').value.trim(); if (!name) { toast('습관 이름을 입력해 주세요'); break; }
-      const data = { emoji: $('f-emoji').value.trim() || '🌱', name, group: $('f-group').value, kind: $('f-kind').value };
-      if (id) { Object.assign(S.habits.find(x => x.id === id), data); save(); render(); showDetail(id); }
+      const data = { emoji: $('f-emoji').value.trim() || '🌱', name, group: $('f-group').value, kind: $('f-kind').value, hint: $('f-hint').value.trim() };
+      if (id) { Object.assign(habit(id), data); save(); render(); showDetail(id); }
       else { S.habits.push({ id: 'h' + Date.now().toString(36), plan: '', ...data }); save(); render(); closeSheet(); toast('새 나무를 심었어요 🌱'); }
       break;
     }
     case 'deleteHabit': {
-      const h = S.habits.find(x => x.id === id);
-      if (h && confirm(`「${h.name}」 나무와 기록을 모두 삭제할까요?`)) { S.habits = S.habits.filter(x => x.id !== id); delete S.log[id]; save(); render(); closeSheet(); }
+      const h = habit(id);
+      if (h) ask(`「${h.name}」 나무와 기록을 모두 삭제할까요?`, () => { S.habits = S.habits.filter(x => x.id !== id); delete S.log[id]; delete S.notes[id]; delete S.slips[id]; save(); render(); closeSheet(); });
       break;
     }
+    case 'askYes': { const f = pendingAsk; pendingAsk = null; $('ask').classList.remove('on'); if (f) f(); break; }
+    case 'askNo': pendingAsk = null; $('ask').classList.remove('on'); break;
     case 'settings': ui.mode = 'settings'; setSheet(settingsHTML()); break;
     case 'export': {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
@@ -433,14 +715,15 @@ document.addEventListener('click', e => {
     }
     case 'import': $('importFile').click(); break;
     case 'reset':
-      if (confirm('정말 모든 기록을 지우고 처음으로 되돌릴까요? 되돌릴 수 없어요.')) { S = { habits: DEFAULTS.map(d => ({...d})), log: {} }; save(); render(); closeSheet(); toast('초기화했어요'); }
+      ask('정말 모든 기록을 지우고 처음으로 되돌릴까요? 되돌릴 수 없어요.', () => { S = blank(); save(); render(); closeSheet(); toast('초기화했어요'); });
       break;
   }
 });
 
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.dataset && t.dataset.plan) { const h = S.habits.find(x => x.id === t.dataset.plan); if (h) { h.plan = t.value.trim(); save(); toast('실천 계획을 저장했어요'); } }
+  if (t.dataset && t.dataset.plan) { const h = habit(t.dataset.plan); if (h) { h.plan = t.value.trim(); save(); toast('실천 계획을 저장했어요'); } }
+  if (t.dataset && t.dataset.jf) { ui.jf = t.value; ui.jl = 30; render(); }
 });
 
 $('importFile').addEventListener('change', e => {
@@ -450,8 +733,7 @@ $('importFile').addEventListener('change', e => {
     try {
       const j = JSON.parse(rd.result);
       if (!j || !Array.isArray(j.habits) || !j.log || typeof j.log !== 'object') throw new Error('bad');
-      if (!confirm('현재 기록을 불러온 파일로 덮어쓸까요?')) return;
-      S = j; save(); render(); closeSheet(); toast('불러왔어요');
+      ask('현재 기록을 불러온 파일로 덮어쓸까요?', () => { S = norm(j); save(); render(); closeSheet(); toast('불러왔어요'); });
     } catch (err) { toast('올바른 백업 파일이 아니에요'); }
   };
   rd.readAsText(f); e.target.value = '';
