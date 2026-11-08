@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="습관의 숲">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2f8a4d">
+<link rel="manifest" href="habits.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>🌳 습관의 숲</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f3f5f0; --surface:#fff; --muted-bg:#eceee8; --border:rgba(0,0,0,.1);
+    --text:#14170f; --text2:#4d5247; --text3:#868b80;
+    --accent:#2f8a4d; --accent-bg:#e4f4ea; --accent-text:#fff;
+    --amber:#b86e00; --amber-bg:#fdf1dc; --red:#d63a2a;
+    --ground:#ddd6c3; --trunk:#7a5a3c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#151813; --surface:#20241c; --muted-bg:#2a2f25; --border:rgba(255,255,255,.1);
+      --text:#eef0e8; --text2:#b4b9aa; --text3:#7d8275;
+      --accent:#5fbf80; --accent-bg:#183222; --accent-text:#0d1a11;
+      --amber:#f0b44c; --amber-bg:#3a2d12; --red:#ff7a6b;
+      --ground:#34382c; --trunk:#a98563;
+    }
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; -webkit-text-size-adjust:100%; }
+  .container { max-width:680px; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top)) 1rem calc(4rem + env(safe-area-inset-bottom)); }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem; }
+  h1 { font-size:22px; font-weight:700; }
+  button { font-family:inherit; }
+  .icon-btn { background:none; border:none; font-size:22px; cursor:pointer; padding:4px 8px; color:var(--text); }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:1rem; margin-bottom:1rem; }
+
+  .daynav { display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:.75rem; }
+  .daynav .label { font-size:17px; font-weight:600; min-width:150px; text-align:center; }
+  .daynav button { background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:16px; padding:6px 12px; cursor:pointer; color:var(--text); }
+  .daynav button:disabled { opacity:.35; }
+  .chip { font-size:12px; background:var(--accent-bg); color:var(--accent); border-radius:99px; padding:2px 8px; margin-left:6px; }
+
+  .summary { display:flex; flex-direction:column; gap:10px; }
+  .summary .big { font-size:15px; color:var(--text2); }
+  .summary .big b { font-size:22px; color:var(--text); }
+  .bar { height:8px; background:var(--muted-bg); border-radius:99px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--accent); border-radius:99px; transition:width .4s; }
+  .summary .sub { display:flex; justify-content:space-between; font-size:13px; color:var(--text3); }
+
+  h2 { font-size:16px; font-weight:600; margin:1.25rem 0 .6rem; color:var(--text2); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (min-width:560px) { .grid { grid-template-columns:repeat(3,1fr); } }
+  .hcard { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 10px 12px; display:flex; flex-direction:column; }
+  .hcard .hit { cursor:pointer; background:none; border:none; text-align:left; color:inherit; padding:0; }
+  .hcard svg { width:100%; height:auto; display:block; }
+  .hname { font-size:14px; font-weight:600; line-height:1.35; margin-top:2px; min-height:2.7em; }
+  .hmeta { display:flex; justify-content:space-between; align-items:baseline; font-size:12px; color:var(--text3); margin:4px 0 6px; }
+  .hmeta b { color:var(--text); font-size:14px; }
+  .wilt { font-size:11px; color:var(--amber); background:var(--amber-bg); border-radius:6px; padding:1px 6px; }
+  .check { margin-top:8px; width:100%; border:1.5px solid var(--accent); background:transparent; color:var(--accent); border-radius:10px; font-size:15px; font-weight:600; padding:10px 0; cursor:pointer; }
+  .check.done { background:var(--accent); color:var(--accent-text); }
+  .add { width:100%; margin-top:1.25rem; padding:14px; border:1.5px dashed var(--border); background:none; border-radius:14px; color:var(--text2); font-size:15px; cursor:pointer; }
+
+  /* 시트 */
+  #overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:20; }
+  #overlay.on { display:block; }
+  #sheet { position:fixed; left:0; right:0; bottom:0; max-width:680px; margin:0 auto; max-height:92vh; overflow-y:auto; background:var(--bg); border-radius:18px 18px 0 0; padding:1rem 1rem calc(2rem + env(safe-area-inset-bottom)); z-index:21; display:none; }
+  #sheet.on { display:block; }
+  .sheet-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; }
+  .sheet-head h3 { font-size:18px; }
+  .stage { text-align:center; margin:2px 0 8px; }
+  .stage .nm { font-size:18px; font-weight:700; }
+  .stage .sub { font-size:13px; color:var(--text3); margin-top:2px; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 6px; text-align:center; }
+  .stat b { display:block; font-size:19px; }
+  .stat span { font-size:12px; color:var(--text3); }
+  label.l { display:block; font-size:13px; color:var(--text2); margin:12px 0 6px; font-weight:600; }
+  textarea, input[type=text], select { width:100%; font-size:16px; padding:11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font-family:inherit; }
+  textarea { resize:vertical; min-height:64px; }
+  .hint { font-size:12.5px; color:var(--text3); margin-top:6px; line-height:1.5; }
+  .cal-head { display:flex; justify-content:space-between; align-items:center; margin:14px 0 6px; }
+  .cal-head b { font-size:15px; }
+  .cal-head button { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:4px 12px; cursor:pointer; color:var(--text); font-size:15px; }
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal .dow { text-align:center; font-size:11px; color:var(--text3); padding-bottom:2px; }
+  .cal button { aspect-ratio:1; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; cursor:pointer; }
+  .cal button.on { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700; }
+  .cal button.today { outline:2px solid var(--accent); outline-offset:-2px; }
+  .cal button:disabled { opacity:.3; cursor:default; }
+  .cal span.empty { display:block; }
+  .btn { border:none; border-radius:10px; font-size:16px; padding:12px 16px; cursor:pointer; font-weight:600; }
+  .btn.primary { background:var(--accent); color:var(--accent-text); }
+  .btn.ghost { background:var(--muted-bg); color:var(--text); }
+  .btn.danger { background:transparent; color:var(--red); border:1px solid var(--border); }
+  .btnrow { display:flex; gap:8px; margin-top:16px; }
+  .btnrow .btn { flex:1; }
+  #toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:11px 18px; border-radius:99px; font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:40; max-width:90vw; text-align:center; }
+  #toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
+  .note { font-size:12.5px; color:var(--text3); line-height:1.6; margin-top:1.5rem; text-align:center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🌳 습관의 숲</h1>
+    <button class="icon-btn" data-act="settings" aria-label="설정">⚙️</button>
+  </header>
+  <div class="daynav" id="daynav"></div>
+  <div class="card summary" id="summary"></div>
+  <div id="forest"></div>
+  <button class="add" data-act="newHabit">＋ 새 나무 심기</button>
+  <p class="note">하루를 빠뜨려도 나무는 줄어들지 않아요.<br>500일 동안 한 그루씩, 천천히 키워 가요.</p>
+</div>
+
+<div id="overlay" data-act="close"></div>
+<div id="sheet" role="dialog" aria-modal="true"></div>
+<div id="toast"></div>
+<input type="file" id="importFile" accept="application/json" hidden>
+
+<script>
+'use strict';
+const KEY = 'habit-trees-v1';
+const GOAL = 500;
+const GROUPS = { att: '🧘 마음가짐 (태도)', growth: '🌱 자기계발' };
+const STAGES = [[0,'씨앗'],[1,'새싹'],[7,'어린 싹'],[30,'묘목'],[100,'젊은 나무'],[250,'든든한 나무'],[500,'거목']];
+
+const DEFAULTS = [
+  { id:'yt',       emoji:'📵', name:'남는 시간에 습관적으로 유튜브 보지 않기', group:'att', kind:'avoid', plan:'남는 시간이 생기면 → 유튜브 대신 책을 펴고 한 페이지만 읽기' },
+  { id:'calm',     emoji:'🌿', name:'어떤 순간에도 짜증내지 않기', group:'att', kind:'avoid', plan:'짜증이 올라오면 → 숨을 천천히 세 번 쉬고, 한 템포 뒤에 말하기' },
+  { id:'soft',     emoji:'🕊️', name:'반대 의견에도 말을 빨리 하거나 언성 높이지 않기', group:'att', kind:'avoid', plan:'반대 의견을 들으면 → 끝까지 듣고, 천천히 한 문장으로 되묻기' },
+  { id:'read',     emoji:'📚', name:'하루 30분 독서', group:'growth', kind:'do', plan:'' },
+  { id:'piano',    emoji:'🎹', name:'피아노 연습', group:'growth', kind:'do', plan:'' },
+  { id:'workout',  emoji:'🏃', name:'운동 (헬스·러닝)', group:'growth', kind:'do', plan:'' },
+  { id:'english',  emoji:'🦉', name:'영어 공부 (Duolingo)', group:'growth', kind:'do', plan:'' },
+  { id:'stock',    emoji:'📈', name:'주식 공부', group:'growth', kind:'do', plan:'' },
+  { id:'research', emoji:'🎓', name:'교육 관련 연구', group:'growth', kind:'do', plan:'' },
+];
+
+/* ---------- 날짜 도우미 ---------- */
+const pad = n => String(n).padStart(2,'0');
+const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const todayStr = () => fmt(new Date());
+const addDays = (s,n) => { const d = parse(s); d.setDate(d.getDate()+n); return fmt(d); };
+const diff = (a,b) => Math.round((parse(a)-parse(b))/864e5);
+const DOW = ['일','월','화','수','목','금','토'];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- 저장소 ---------- */
+let S = load();
+function load() {
+  try {
+    const j = JSON.parse(localStorage.getItem(KEY));
+    if (j && Array.isArray(j.habits) && j.log && typeof j.log === 'object') return j;
+  } catch (e) {}
+  return { habits: DEFAULTS.map(d => ({...d})), log: {} };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { toast('저장에 실패했어요. 저장 공간을 확인해 주세요'); }
+}
+
+/* ---------- 통계 ---------- */
+const doneDates = id => Object.keys(S.log[id] || {}).filter(k => S.log[id][k]).sort();
+const countDays = id => doneDates(id).length;
+const isDone = (id, date) => !!(S.log[id] && S.log[id][date]);
+function stageIdx(days) { let i = 0; STAGES.forEach((s,k) => { if (days >= s[0]) i = k; }); return i; }
+function wiltLevel(id) {
+  const ds = doneDates(id);
+  if (!ds.length) return 0;
+  const gap = diff(todayStr(), ds[ds.length-1]);
+  return gap < 3 ? 0 : Math.min((gap-2)/5, 1);
+}
+function streaks(id) {
+  const set = new Set(doneDates(id));
+  let cur = 0, d = todayStr();
+  if (!set.has(d)) d = addDays(d,-1);
+  while (set.has(d)) { cur++; d = addDays(d,-1); }
+  let best = 0, run = 0, prev = null;
+  [...set].sort().forEach(k => { run = (prev && diff(k,prev) === 1) ? run+1 : 1; best = Math.max(best, run); prev = k; });
+  return { cur, best };
+}
+function recentRate(id) {
+  const set = new Set(doneDates(id)); let n = 0, t = todayStr();
+  for (let i = 0; i < 30; i++) if (set.has(addDays(t,-i))) n++;
+  return Math.round(n/30*100);
+}
+
+/* ---------- 나무 그리기 ---------- */
+function hash(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function mulberry32(a) { return function() { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const lerp = (a,b,t) => a + (b-a)*t;
+
+function treeSVG(days, wilt, key) {
+  const rnd = mulberry32(hash(key));
+  const p = Math.min(days / GOAL, 1);
+  let body = '';
+  const wrap = inner => `<svg viewBox="0 0 200 190" role="img" aria-label="${days}일 자란 나무">${inner}</svg>`;
+  let s = `<ellipse cx="100" cy="182" rx="${46 + p*30}" ry="7" style="fill:var(--ground)"/>`;
+  if (days <= 0) {
+    s += `<ellipse cx="100" cy="176" rx="8" ry="5.5" fill="#8a6a45"/><path d="M95 173 q5 -4 10 0" stroke="#6b4f30" stroke-width="1.3" fill="none"/>`;
+    return wrap(s);
+  }
+  const maxD = days < 7 ? 1 : days < 30 ? 2 : days < 100 ? 3 : days < 250 ? 4 : 5;
+  const L0 = 10 + 40 * Math.sqrt(p);
+  const w0 = 2 + 7 * Math.sqrt(p);
+  const droop = wilt * 9;
+  const leaves = [];
+  const leafColor = () => {
+    const h = lerp(112 + rnd()*30, 42, wilt), sat = lerp(52 + rnd()*10, 40, wilt), l = lerp(34 + rnd()*14, 42, wilt);
+    return `hsl(${h.toFixed(0)} ${sat.toFixed(0)}% ${l.toFixed(0)}%)`;
+  };
+  const r = 3 + 6 * Math.sqrt(p);
+  function branch(x, y, ang, len, d) {
+    const rad = ang * Math.PI / 180;
+    const x2 = x + Math.sin(rad) * len, y2 = y - Math.cos(rad) * len;
+    const w = Math.max(1, w0 * Math.pow(0.62, d));
+    body += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke-width="${w.toFixed(1)}" stroke-linecap="round" style="stroke:var(--trunk)"/>`;
+    if (d + 1 < maxD) {
+      const n = (d >= 1 && rnd() < 0.25) ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        const spread = n === 2 ? (i ? 1 : -1) * (20 + rnd()*14) : (i-1) * (26 + rnd()*8);
+        let a2 = ang + spread;
+        a2 += (a2 >= 0 ? 1 : -1) * droop * (d + 1) * 0.6;
+        branch(x2, y2, a2, len * (0.7 + rnd()*0.08), d + 1);
+      }
+      if (d >= 2) leaves.push([x2, y2, r * 0.8]);
+    } else {
+      leaves.push([x2, y2, r]);
+    }
+  }
+  branch(100, 180, (rnd() - 0.5) * 6, L0, 0);
+
+  const fruitOn = p >= 1;
+  leaves.forEach(([x, y, rr]) => {
+    if (days < 7) {   // 새싹: 떡잎 두 장
+      body += `<ellipse cx="${(x-5).toFixed(1)}" cy="${(y-1).toFixed(1)}" rx="6" ry="3.2" transform="rotate(-25 ${(x-5).toFixed(1)} ${(y-1).toFixed(1)})" fill="${leafColor()}"/>`;
+      body += `<ellipse cx="${(x+5).toFixed(1)}" cy="${(y-1).toFixed(1)}" rx="6" ry="3.2" transform="rotate(25 ${(x+5).toFixed(1)} ${(y-1).toFixed(1)})" fill="${leafColor()}"/>`;
+      return;
+    }
+    const n = 3 + Math.floor(rnd()*3);
+    for (let i = 0; i < n; i++) {
+      const ox = (rnd()-0.5) * rr * 2.6, oy = (rnd()-0.5) * rr * 2.2;
+      body += `<circle cx="${(x+ox).toFixed(1)}" cy="${(y+oy).toFixed(1)}" r="${(rr*(0.7+rnd()*0.5)).toFixed(1)}" fill="${leafColor()}" fill-opacity="${(0.92 - wilt*0.2).toFixed(2)}"/>`;
+    }
+    if (fruitOn && rnd() < 0.5) body += `<circle cx="${(x+(rnd()-0.5)*rr*2).toFixed(1)}" cy="${(y+rr*0.6).toFixed(1)}" r="3.4" fill="#e5484d"/>`;
+  });
+  if (wilt > 0.2) {   // 떨어진 잎
+    for (let i = 0; i < 4; i++) body += `<ellipse cx="${(70 + rnd()*60).toFixed(0)}" cy="${(179 + rnd()*5).toFixed(0)}" rx="3.4" ry="1.7" fill="hsl(38 45% 45%)"/>`;
+  }
+  if (fruitOn) body += `<text x="100" y="20" text-anchor="middle" font-size="16">✨</text>`;
+  return wrap(s + body);
+}
+
+/* ---------- 화면 ---------- */
+const ui = { date: todayStr(), open: null, mode: null, cal: todayStr().slice(0,7), formId: null };
+const $ = id => document.getElementById(id);
+
+function render() {
+  const t = todayStr(), vd = ui.date;
+  const dd = parse(vd);
+  const label = `${dd.getMonth()+1}월 ${dd.getDate()}일 (${DOW[dd.getDay()]})`;
+  $('daynav').innerHTML =
+    `<button data-act="prevDay" aria-label="전날">◀</button>` +
+    `<div class="label">${label}${vd === t ? '<span class="chip">오늘</span>' : ''}</div>` +
+    `<button data-act="nextDay" ${vd >= t ? 'disabled' : ''} aria-label="다음날">▶</button>` +
+    (vd !== t ? `<button data-act="goToday">오늘</button>` : '');
+
+  const hs = S.habits, total = hs.length;
+  const doneNow = hs.filter(h => isDone(h.id, vd)).length;
+  const sumDays = hs.reduce((a,h) => a + countDays(h.id), 0);
+  let best = null; hs.forEach(h => { const c = countDays(h.id); if (!best || c > best.c) best = { h, c }; });
+  $('summary').innerHTML =
+    `<div class="big">${vd === t ? '오늘' : '이날'} <b>${doneNow}</b> / ${total} 그루에 물을 줬어요</div>` +
+    `<div class="bar"><i style="width:${total ? doneNow/total*100 : 0}%"></i></div>` +
+    `<div class="sub"><span>숲 전체 누적 ${sumDays}일</span><span>${best && best.c ? `가장 큰 나무 ${esc(best.h.emoji)} ${best.c}일` : '첫 물을 줘 보세요'}</span></div>`;
+
+  let html = '';
+  Object.keys(GROUPS).forEach(g => {
+    const list = hs.filter(h => h.group === g);
+    if (!list.length) return;
+    html += `<h2>${GROUPS[g]}</h2><div class="grid">` + list.map(h => card(h, vd)).join('') + `</div>`;
+  });
+  $('forest').innerHTML = html;
+}
+
+function checkLabel(h, done) { return h.kind === 'avoid' ? (done ? '✓ 지켰어요' : '지켰나요?') : (done ? '✓ 했어요' : '했나요?'); }
+
+function card(h, vd) {
+  const days = countDays(h.id), w = wiltLevel(h.id), done = isDone(h.id, vd);
+  return `<div class="hcard">
+    <button class="hit" data-act="open" data-id="${esc(h.id)}">
+      ${treeSVG(days, w, h.id)}
+      <div class="hname">${esc(h.emoji)} ${esc(h.name)}</div>
+    </button>
+    <div class="hmeta"><span><b>${days}</b> / ${GOAL}일</span>${w > 0 ? '<span class="wilt">시들어가요</span>' : `<span>${STAGES[stageIdx(days)][1]}</span>`}</div>
+    <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
+    <button class="check ${done ? 'done' : ''}" data-act="toggle" data-id="${esc(h.id)}">${checkLabel(h, done)}</button>
+  </div>`;
+}
+
+/* ---------- 시트 ---------- */
+function openSheet() { $('overlay').classList.add('on'); $('sheet').classList.add('on'); }
+function closeSheet() { $('overlay').classList.remove('on'); $('sheet').classList.remove('on'); ui.open = null; ui.mode = null; }
+function setSheet(html) { const sh = $('sheet'), top = sh.scrollTop; sh.innerHTML = html; sh.scrollTop = top; openSheet(); }
+
+function detailHTML(h) {
+  const days = countDays(h.id), w = wiltLevel(h.id), si = stageIdx(days), st = streaks(h.id);
+  const next = STAGES[si+1];
+  const sub = next ? `다음 단계 「${next[1]}」까지 ${next[0]-days}일` : '500일을 모두 채웠어요! 🎉';
+  // 달력
+  const [cy, cm] = ui.cal.split('-').map(Number);
+  const first = new Date(cy, cm-1, 1), last = new Date(cy, cm, 0).getDate();
+  const t = todayStr();
+  let cells = DOW.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < first.getDay(); i++) cells += `<span class="empty"></span>`;
+  for (let d = 1; d <= last; d++) {
+    const ds = `${cy}-${pad(cm)}-${pad(d)}`;
+    cells += `<button class="${isDone(h.id, ds) ? 'on' : ''} ${ds === t ? 'today' : ''}" data-act="calToggle" data-date="${ds}" ${ds > t ? 'disabled' : ''}>${d}</button>`;
+  }
+  return `
+    <div class="sheet-head"><h3>${esc(h.emoji)} ${esc(h.name)}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
+    <div style="max-width:210px;margin:0 auto">${treeSVG(days, w, h.id)}</div>
+    <div class="stage"><div class="nm">${STAGES[si][1]} · ${days} / ${GOAL}일</div>
+      <div class="sub">${sub}${w > 0 ? ' · 물이 필요해요 💧' : ''}</div></div>
+    <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
+    <div class="stats">
+      <div class="stat"><b>${st.cur}일</b><span>현재 연속</span></div>
+      <div class="stat"><b>${st.best}일</b><span>최장 연속</span></div>
+      <div class="stat"><b>${recentRate(h.id)}%</b><span>최근 30일</span></div>
+    </div>
+    <label class="l" for="plan">나만의 실천 계획 (If → Then)</label>
+    <textarea id="plan" data-plan="${esc(h.id)}" placeholder="예) 저녁 식사를 마치면 → 책상에 앉아 타이머 30분 켜기">${esc(h.plan || '')}</textarea>
+    <div class="hint">“언제/어떤 상황이면 → 무엇을 한다”처럼 구체적으로 적어 두면 실천이 쉬워져요.</div>
+    <div class="cal-head"><button data-act="calPrev">◀</button><b>${cy}년 ${cm}월</b><button data-act="calNext" ${ui.cal >= t.slice(0,7) ? 'disabled' : ''}>▶</button></div>
+    <div class="cal">${cells}</div>
+    <div class="hint">날짜를 누르면 지난 기록도 고치거나 채울 수 있어요.</div>
+    <div class="btnrow"><button class="btn ghost" data-act="editHabit" data-id="${esc(h.id)}">✏️ 나무 수정</button></div>`;
+}
+
+function formHTML(h) {
+  const isNew = !h;
+  h = h || { emoji:'🌱', name:'', group:'growth', kind:'do' };
+  return `
+    <div class="sheet-head"><h3>${isNew ? '새 나무 심기' : '나무 수정'}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
+    <label class="l" for="f-emoji">이모지</label><input type="text" id="f-emoji" maxlength="4" value="${esc(h.emoji)}">
+    <label class="l" for="f-name">습관 이름</label><input type="text" id="f-name" maxlength="60" value="${esc(h.name)}" placeholder="예) 매일 스트레칭 10분">
+    <label class="l" for="f-group">분류</label>
+    <select id="f-group"><option value="att" ${h.group==='att'?'selected':''}>마음가짐 (태도)</option><option value="growth" ${h.group==='growth'?'selected':''}>자기계발</option></select>
+    <label class="l" for="f-kind">기록 방식</label>
+    <select id="f-kind"><option value="do" ${h.kind==='do'?'selected':''}>했어요 (하는 습관)</option><option value="avoid" ${h.kind==='avoid'?'selected':''}>지켰어요 (하지 않는 습관)</option></select>
+    <div class="btnrow">
+      ${isNew ? '' : `<button class="btn danger" data-act="deleteHabit" data-id="${esc(h.id)}">삭제</button>`}
+      <button class="btn primary" data-act="saveHabit" data-id="${isNew ? '' : esc(h.id)}">${isNew ? '심기' : '저장'}</button>
+    </div>`;
+}
+
+function settingsHTML() {
+  return `
+    <div class="sheet-head"><h3>⚙️ 설정</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
+    <div class="card" style="margin-top:8px">
+      <b>기록 백업</b>
+      <div class="hint">기록은 이 기기의 브라우저에만 저장돼요. 브라우저 데이터를 지우면 사라지니, 가끔 백업 파일을 내려받아 두세요.</div>
+      <div class="btnrow"><button class="btn ghost" data-act="export">내보내기</button><button class="btn ghost" data-act="import">불러오기</button></div>
+    </div>
+    <div class="card">
+      <b>초기화</b>
+      <div class="hint">모든 나무와 기록을 지우고 처음 상태로 되돌립니다.</div>
+      <div class="btnrow"><button class="btn danger" data-act="reset">전체 초기화</button></div>
+    </div>`;
+}
+
+function showDetail(id) {
+  const h = S.habits.find(x => x.id === id); if (!h) return closeSheet();
+  ui.open = id; ui.mode = 'detail'; setSheet(detailHTML(h));
+}
+
+/* ---------- 동작 ---------- */
+let toastTimer;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); }
+
+function setDone(id, date, val) {
+  const before = stageIdx(countDays(id));
+  S.log[id] = S.log[id] || {};
+  if (val) S.log[id][date] = 1; else delete S.log[id][date];
+  save();
+  const after = stageIdx(countDays(id));
+  if (val && after > before) {
+    const h = S.habits.find(x => x.id === id);
+    toast(after === STAGES.length-1 ? `🎉 ${h.emoji} 500일 달성! 거목이 되었어요` : `🌱 ${h.emoji} 「${STAGES[after][1]}」 단계로 자랐어요!`);
+  } else if (val) {
+    toast('물을 줬어요 💧');
+  }
+}
+
+function refresh() { render(); if (ui.mode === 'detail' && ui.open) showDetail(ui.open); }
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.dataset.act, id = el.dataset.id;
+  switch (act) {
+    case 'toggle': setDone(id, ui.date, !isDone(id, ui.date)); render(); break;
+    case 'open': ui.cal = ui.date.slice(0,7); showDetail(id); break;
+    case 'close': closeSheet(); break;
+    case 'prevDay': ui.date = addDays(ui.date,-1); render(); break;
+    case 'nextDay': if (ui.date < todayStr()) { ui.date = addDays(ui.date,1); render(); } break;
+    case 'goToday': ui.date = todayStr(); render(); break;
+    case 'calPrev': { const [y,m] = ui.cal.split('-').map(Number); const d = new Date(y, m-2, 1); ui.cal = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; showDetail(ui.open); break; }
+    case 'calNext': { const [y,m] = ui.cal.split('-').map(Number); const d = new Date(y, m, 1); const nx = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; if (nx <= todayStr().slice(0,7)) { ui.cal = nx; showDetail(ui.open); } break; }
+    case 'calToggle': { const date = el.dataset.date; if (date > todayStr()) break; setDone(ui.open, date, !isDone(ui.open, date)); refresh(); break; }
+    case 'newHabit': ui.mode = 'form'; ui.formId = null; setSheet(formHTML(null)); break;
+    case 'editHabit': ui.mode = 'form'; ui.formId = id; setSheet(formHTML(S.habits.find(x => x.id === id))); break;
+    case 'saveHabit': {
+      const name = $('f-name').value.trim(); if (!name) { toast('습관 이름을 입력해 주세요'); break; }
+      const data = { emoji: $('f-emoji').value.trim() || '🌱', name, group: $('f-group').value, kind: $('f-kind').value };
+      if (id) { Object.assign(S.habits.find(x => x.id === id), data); save(); render(); showDetail(id); }
+      else { S.habits.push({ id: 'h' + Date.now().toString(36), plan: '', ...data }); save(); render(); closeSheet(); toast('새 나무를 심었어요 🌱'); }
+      break;
+    }
+    case 'deleteHabit': {
+      const h = S.habits.find(x => x.id === id);
+      if (h && confirm(`「${h.name}」 나무와 기록을 모두 삭제할까요?`)) { S.habits = S.habits.filter(x => x.id !== id); delete S.log[id]; save(); render(); closeSheet(); }
+      break;
+    }
+    case 'settings': ui.mode = 'settings'; setSheet(settingsHTML()); break;
+    case 'export': {
+      const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `habit-forest-${todayStr()}.json`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000); break;
+    }
+    case 'import': $('importFile').click(); break;
+    case 'reset':
+      if (confirm('정말 모든 기록을 지우고 처음으로 되돌릴까요? 되돌릴 수 없어요.')) { S = { habits: DEFAULTS.map(d => ({...d})), log: {} }; save(); render(); closeSheet(); toast('초기화했어요'); }
+      break;
+  }
+});
+
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.plan) { const h = S.habits.find(x => x.id === t.dataset.plan); if (h) { h.plan = t.value.trim(); save(); toast('실천 계획을 저장했어요'); } }
+});
+
+$('importFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const j = JSON.parse(rd.result);
+      if (!j || !Array.isArray(j.habits) || !j.log || typeof j.log !== 'object') throw new Error('bad');
+      if (!confirm('현재 기록을 불러온 파일로 덮어쓸까요?')) return;
+      S = j; save(); render(); closeSheet(); toast('불러왔어요');
+    } catch (err) { toast('올바른 백업 파일이 아니에요'); }
+  };
+  rd.readAsText(f); e.target.value = '';
+});
+
+// 자정이 지나 앱이 다시 보일 때 "오늘"을 갱신
+let lastToday = todayStr();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && todayStr() !== lastToday) { if (ui.date === lastToday) ui.date = todayStr(); lastToday = todayStr(); render(); }
+});
+
+render();
+</script>
+</body>
+</html>
