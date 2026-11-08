@@ -17,7 +17,7 @@
     --text:#14170f; --text2:#4d5247; --text3:#868b80;
     --accent:#2f8a4d; --accent-bg:#e4f4ea; --accent-text:#fff;
     --amber:#b86e00; --amber-bg:#fdf1dc; --red:#d63a2a; --red-bg:#fbeae7;
-    --ground:#ddd6c3; --trunk:#7a5a3c;
+    --ground:#ddd6c3; --trunk:#7a5a3c; --fire:#c2410c; --fire-bg:#ffedd5;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -25,7 +25,7 @@
       --text:#eef0e8; --text2:#b4b9aa; --text3:#7d8275;
       --accent:#5fbf80; --accent-bg:#183222; --accent-text:#0d1a11;
       --amber:#f0b44c; --amber-bg:#3a2d12; --red:#ff7a6b; --red-bg:#3a1f1b;
-      --ground:#34382c; --trunk:#a98563; color-scheme:dark;
+      --ground:#34382c; --trunk:#a98563; --fire:#fdba74; --fire-bg:#4a2410; color-scheme:dark;
     }
   }
   :root[data-theme="dark"] {
@@ -33,7 +33,7 @@
       --text:#eef0e8; --text2:#b4b9aa; --text3:#7d8275;
       --accent:#5fbf80; --accent-bg:#183222; --accent-text:#0d1a11;
       --amber:#f0b44c; --amber-bg:#3a2d12; --red:#ff7a6b; --red-bg:#3a1f1b;
-      --ground:#34382c; --trunk:#a98563; color-scheme:dark;
+      --ground:#34382c; --trunk:#a98563; --fire:#fdba74; --fire-bg:#4a2410; color-scheme:dark;
   }
   body { font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; -webkit-text-size-adjust:100%; }
   .container { max-width:680px; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top)) 1rem calc(4rem + env(safe-area-inset-bottom)); }
@@ -74,7 +74,7 @@
   .cdetail { font-size:12px; color:var(--text2); margin-top:8px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-all; }
   .cdetail.bad { color:var(--red); }
   .acts { margin-top:auto; padding-top:8px; display:flex; gap:6px; }
-  .check { flex:1; border:1.5px solid var(--accent); background:transparent; color:var(--accent); border-radius:10px; font-size:14px; font-weight:600; padding:10px 2px; cursor:pointer; white-space:nowrap; }
+  .check { flex:1; min-width:0; border:1.5px solid var(--accent); background:transparent; color:var(--accent); border-radius:10px; font-size:14px; font-weight:600; padding:10px 2px; cursor:pointer; white-space:nowrap; }
   .check.done { background:var(--accent); color:var(--accent-text); }
   .check.slip { border-color:var(--red); color:var(--red); }
   .check.slip.on { background:var(--red); color:#fff; }
@@ -142,11 +142,55 @@
   .btnrow .btn { flex:1; }
   .slipitem { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; background:var(--red-bg); border-radius:10px; padding:9px 12px; margin-top:6px; font-size:14px; line-height:1.45; }
   .slipitem button { background:none; border:none; color:var(--red); font-size:16px; cursor:pointer; padding:0 4px; }
+  .fire { font-size:11px; color:var(--fire); background:var(--fire-bg); border-radius:6px; padding:1px 6px; font-weight:700; }
+  .nudge { font-size:12px; color:var(--fire); margin-top:8px; line-height:1.4; }
+  .streakbox { background:var(--fire-bg); color:var(--fire); border-radius:12px; padding:12px 14px; margin:12px 0; }
+  .streakbox b { font-size:17px; }
+  .streakbox .bar { background:rgba(0,0,0,.12); margin-top:10px; }
+  .streakbox .bar > i { background:var(--fire); }
+  .badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .badge { font-size:12px; border-radius:99px; padding:3px 10px; background:rgba(0,0,0,.08); color:var(--text3); }
+  .badge.on { background:var(--surface); color:var(--fire); font-weight:700; border:1px solid var(--fire); }
+  .range { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .range button { border:1px solid var(--border); background:var(--surface); color:var(--text2); border-radius:99px; font-size:13px; padding:6px 12px; cursor:pointer; }
+  .range button.on { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  .daterow { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:8px; align-items:center; margin-bottom:10px; color:var(--text3); }
+  .rsum { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 6px; }
+  .rsum span { font-size:12.5px; background:var(--surface); border:1px solid var(--border); border-radius:99px; padding:4px 10px; color:var(--text2); }
+  .rsum span.bad { color:var(--red); }
+  .mnav { display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:.8rem; }
+  .mnav b { font-size:17px; min-width:130px; text-align:center; }
+  .mnav button { background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:16px; padding:6px 12px; cursor:pointer; color:var(--text); }
+  .mnav button:disabled { opacity:.35; }
+  .bigrate { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .bigrate b { font-size:42px; font-weight:800; line-height:1; }
+  .delta { font-size:14px; font-weight:700; }
+  .delta.up { color:var(--accent); } .delta.down { color:var(--red); } .delta.flat { color:var(--text3); }
+  .heat { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:8px; }
+  .heat .dow { text-align:center; font-size:11px; color:var(--text3); }
+  .heat div.c { aspect-ratio:1; border-radius:6px; font-size:11px; display:flex; align-items:center; justify-content:center; color:var(--text2); background:var(--muted-bg); }
+  .heat .h1 { background:color-mix(in srgb, var(--accent) 25%, var(--surface)); }
+  .heat .h2 { background:color-mix(in srgb, var(--accent) 50%, var(--surface)); }
+  .heat .h3 { background:color-mix(in srgb, var(--accent) 75%, var(--surface)); color:var(--accent-text); }
+  .heat .h4 { background:var(--accent); color:var(--accent-text); font-weight:700; }
+  .heat .fut { opacity:.35; }
+  .minibars i.g { background:var(--accent); }
+  .hrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 12px; padding:10px 0; border-bottom:1px solid var(--border); align-items:center; }
+  .hrow:last-child { border-bottom:none; }
+  .hrow .nm { font-size:14px; font-weight:600; word-break:break-word; }
+  .hrow .rt { text-align:right; font-size:13px; white-space:nowrap; line-height:1.5; }
+  .insl { list-style:none; }
+  .insl li { padding:9px 0; border-bottom:1px solid var(--border); font-size:14px; line-height:1.6; }
+  .insl li:last-child { border-bottom:none; }
+  .rcard-title { font-size:15px; font-weight:700; margin-bottom:6px; }
+  .burst { position:fixed; bottom:22vh; font-size:28px; animation:rise 1.5s ease-out forwards; pointer-events:none; z-index:70; }
+  @keyframes rise { from { transform:translateY(0) scale(.6); opacity:1; } to { transform:translateY(-62vh) scale(1.3); opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .burst { display:none; } }
   #ask { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:50; padding:1rem; }
   #ask.on { display:flex; }
   #ask .box { background:var(--surface); border-radius:14px; padding:1.1rem; max-width:340px; width:100%; }
   #ask p { font-size:15px; line-height:1.55; }
-  #toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:11px 18px; border-radius:99px; font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:60; max-width:90vw; text-align:center; }
+  #toast { white-space:pre-line; position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:11px 18px; border-radius:99px; font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:60; max-width:90vw; text-align:center; }
   #toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
   .note { font-size:12.5px; color:var(--text3); line-height:1.6; margin-top:1.5rem; text-align:center; }
 </style>
@@ -167,6 +211,7 @@
     <p class="note">하루를 빠뜨려도 나무는 줄어들지 않아요.<br>500일 동안 한 그루씩, 천천히 키워 가요.</p>
   </div>
   <div id="viewJournal" hidden></div>
+  <div id="viewReport" hidden></div>
 </div>
 
 <div id="overlay" data-act="close"></div>
@@ -180,6 +225,8 @@
 const KEY = 'habit-trees-v1';
 const GOAL = 500;
 const GROUPS = { att: '🧘 마음가짐 (태도)', growth: '🌱 자기계발' };
+const MILESTONES = [3,7,14,21,30,50,66,100,150,200,300,365,500];
+const MS_MSG = {3:'3일 연속! 좋은 출발이에요',7:'일주일 연속! 불씨가 붙었어요',14:'2주 연속! 리듬이 잡히고 있어요',21:'21일 연속! 습관의 싹이 보여요',30:'한 달 연속! 정말 대단해요',50:'50일 연속! 반환점이 보여요',66:'66일 연속! 습관이 자리 잡기 시작한다고 자주 말하는 시점이에요',100:'백일 연속! 흔들리지 않는 힘이에요',150:'150일 연속! 이제 생활의 일부예요',200:'200일 연속! 놀라운 꾸준함이에요',300:'300일 연속! 거의 다 왔어요',365:'1년 연속! 한 해를 통째로 해냈어요',500:'500일 연속! 습관이 몸에 배었어요'};
 const STAGES = [[0,'씨앗'],[1,'새싹'],[7,'어린 싹'],[30,'묘목'],[100,'젊은 나무'],[250,'든든한 나무'],[500,'거목']];
 
 const DEFAULTS = [
@@ -281,7 +328,7 @@ function hash(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeA
 function mulberry32(a) { return function() { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const lerp = (a,b,t) => a + (b-a)*t;
 
-function treeSVG(days, wilt, key) {
+function treeSVG(days, wilt, key, streak = 0) {
   const rnd = mulberry32(hash(key));
   const p = Math.min(days / GOAL, 1);
   let body = '';
@@ -290,6 +337,13 @@ function treeSVG(days, wilt, key) {
   if (days <= 0) {
     s += `<ellipse cx="100" cy="176" rx="8" ry="5.5" fill="#8a6a45"/><path d="M95 173 q5 -4 10 0" stroke="#6b4f30" stroke-width="1.3" fill="none"/>`;
     return wrap(s);
+  }
+  let aura = '';
+  if (streak >= 3 && wilt === 0) {   // 연속 중이면 나무 뒤에 금빛 후광
+    const t = streak >= 100 ? 4 : streak >= 30 ? 3 : streak >= 7 ? 2 : 1, gid = `ag${hash(key) % 100000}_${t}`;
+    aura = `<defs><radialGradient id="${gid}"><stop offset="0" stop-color="#ffd25a" stop-opacity="${[0,.28,.4,.5,.6][t]}"/><stop offset="1" stop-color="#ffd25a" stop-opacity="0"/></radialGradient></defs><circle cx="100" cy="105" r="${72 + t*5}" fill="url(#${gid})"/>`;
+    if (t >= 3) aura += `<text x="38" y="60" font-size="12">✦</text><text x="158" y="78" font-size="10">✦</text><text x="150" y="40" font-size="13">✨</text>`;
+    if (t >= 4) aura += `<circle cx="100" cy="105" r="88" fill="none" stroke="#ffd25a" stroke-opacity=".5" stroke-width="1.5" stroke-dasharray="3 5"/>`;
   }
   const maxD = days < 7 ? 1 : days < 30 ? 2 : days < 100 ? 3 : days < 250 ? 4 : 5;
   const L0 = 10 + 40 * Math.sqrt(p);
@@ -339,21 +393,23 @@ function treeSVG(days, wilt, key) {
     for (let i = 0; i < 4; i++) body += `<ellipse cx="${(70 + rnd()*60).toFixed(0)}" cy="${(179 + rnd()*5).toFixed(0)}" rx="3.4" ry="1.7" fill="hsl(38 45% 45%)"/>`;
   }
   if (fruitOn) body += `<text x="100" y="20" text-anchor="middle" font-size="16">✨</text>`;
-  return wrap(s + body);
+  return wrap(s + aura + body);
 }
 
 /* ---------- 화면 ---------- */
-const ui = { tab: 'forest', date: todayStr(), open: null, mode: null, cal: todayStr().slice(0,7), formId: null, day: null, jf: 'all', jl: 30 };
+const ui = { tab: 'forest', date: todayStr(), open: null, mode: null, cal: todayStr().slice(0,7), formId: null, day: null,
+  jf: 'all', jp: '30', jfrom: addDays(todayStr(), -29), jto: todayStr(), rm: todayStr().slice(0,7) };
 const $ = id => document.getElementById(id);
+const TABS = [['forest','🌳 숲'],['journal','📒 일지'],['report','📊 리포트']];
 
 function render() {
   $('demoBanner').hidden = !S.demo;
-  $('tabs').innerHTML =
-    `<button class="${ui.tab === 'forest' ? 'on' : ''}" data-act="tab" data-id="forest">🌳 숲</button>` +
-    `<button class="${ui.tab === 'journal' ? 'on' : ''}" data-act="tab" data-id="journal">📒 일지</button>`;
+  $('tabs').innerHTML = TABS.map(([k, l]) => `<button class="${ui.tab === k ? 'on' : ''}" data-act="tab" data-id="${k}">${l}</button>`).join('');
   $('viewForest').hidden = ui.tab !== 'forest';
   $('viewJournal').hidden = ui.tab !== 'journal';
+  $('viewReport').hidden = ui.tab !== 'report';
   if (ui.tab === 'journal') { $('viewJournal').innerHTML = journalHTML(); return; }
+  if (ui.tab === 'report') { $('viewReport').innerHTML = reportHTML(); return; }
 
   const t = todayStr(), vd = ui.date;
   const dd = parse(vd);
@@ -368,10 +424,16 @@ function render() {
   const doneNow = hs.filter(h => isDone(h.id, vd)).length;
   const sumDays = hs.reduce((a,h) => a + countDays(h.id), 0);
   let best = null; hs.forEach(h => { const c = countDays(h.id); if (!best || c > best.c) best = { h, c }; });
+  const sts = hs.map(h => ({ h, c: streaks(h.id).cur, done: isDone(h.id, t) }));
+  const live = sts.filter(x => x.c >= 3).sort((a,b) => b.c - a.c);
+  const risk = vd === t ? live.filter(x => !x.done) : [];
+  let extra = '';
+  if (live.length) extra += `<div class="nudge" style="margin-top:0">🔥 ${live.length}개 습관 연속 중 · 최장 ${esc(live[0].h.emoji)} ${live[0].c}일</div>`;
+  if (risk.length) extra += `<div class="nudge" style="margin-top:0">오늘 하면 이어지는 연속: ${risk.map(x => `${esc(x.h.emoji)} ${x.c+1}일째`).join(' · ')}</div>`;
   $('summary').innerHTML =
     `<div class="big">${vd === t ? '오늘' : '이날'} <b>${doneNow}</b> / ${total} 그루에 물을 줬어요</div>` +
     `<div class="bar"><i style="width:${total ? doneNow/total*100 : 0}%"></i></div>` +
-    `<div class="sub"><span>숲 전체 누적 ${sumDays}일</span><span>${best && best.c ? `가장 큰 나무 ${esc(best.h.emoji)} ${best.c}일` : '첫 물을 줘 보세요'}</span></div>`;
+    `<div class="sub"><span>숲 전체 누적 ${sumDays}일</span><span>${best && best.c ? `가장 큰 나무 ${esc(best.h.emoji)} ${best.c}일` : '첫 물을 줘 보세요'}</span></div>` + extra;
 
   let html = '';
   Object.keys(GROUPS).forEach(g => {
@@ -384,25 +446,27 @@ function render() {
 
 function card(h, vd) {
   const days = countDays(h.id), w = wiltLevel(h.id), done = isDone(h.id, vd);
-  const id = esc(h.id);
+  const st = streaks(h.id).cur, id = esc(h.id);
   let detail = '', acts = '';
   if (h.kind === 'avoid') {
     const sl = slipsOf(h.id, vd);
     if (sl.length) detail = `<div class="cdetail bad">✗ ${sl.length}회 · ${esc(sl[sl.length-1].t)}</div>`;
     acts = `<button class="check ${done ? 'done' : ''}" data-act="toggle" data-id="${id}">${done ? '✓ 지켰어요' : '지켰어요'}</button>` +
-           `<button class="check slip ${sl.length ? 'on' : ''}" data-act="slip" data-id="${id}">${sl.length ? `못 지킴 ${sl.length}` : '못 지켰어요'}</button>`;
+           `<button class="check slip ${sl.length ? 'on' : ''}" data-act="slip" data-id="${id}">${sl.length ? `못 지킴 ${sl.length}` : '못 지킴'}</button>`;
   } else {
     const n = noteOf(h.id, vd);
     if (done && n && (n.t || n.m)) detail = `<div class="cdetail">${esc(n.t || '')}${n.m ? ` · ${n.m}분` : ''}</div>`;
     acts = `<button class="check ${done ? 'done' : ''}" data-act="toggle" data-id="${id}">${done ? '✓ 했어요' : '했나요?'}</button>` +
            (done ? `<button class="check note" data-act="editDay" data-id="${id}" data-date="${vd}" aria-label="내용 적기">✎</button>` : '');
   }
+  if (!detail && !done && vd === todayStr() && st >= 3) detail = `<div class="nudge">오늘 ${h.kind === 'avoid' ? '지키면' : '하면'} ${st+1}일 연속!</div>`;
+  const right = w > 0 ? '<span class="wilt">시들어가요</span>' : (st >= 2 ? `<span class="fire">🔥 ${st}일 연속</span>` : `<span>${STAGES[stageIdx(days)][1]}</span>`);
   return `<div class="hcard">
     <button class="hit" data-act="open" data-id="${id}">
-      ${treeSVG(days, w, h.id)}
+      ${treeSVG(days, w, h.id, st)}
       <div class="hname">${esc(h.emoji)} ${esc(h.name)}</div>
     </button>
-    <div class="hmeta"><span><b>${days}</b> / ${GOAL}일</span>${w > 0 ? '<span class="wilt">시들어가요</span>' : `<span>${STAGES[stageIdx(days)][1]}</span>`}</div>
+    <div class="hmeta"><span><b>${days}</b> / ${GOAL}일</span>${right}</div>
     <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
     ${detail}
     <div class="acts">${acts}</div>
@@ -410,21 +474,41 @@ function card(h, vd) {
 }
 
 /* ---------- 일지 ---------- */
+const fmtMin = m => m >= 60 ? `${Math.floor(m/60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`;
+const shortName = h => `${h.emoji} ${h.name.length > 16 ? h.name.slice(0,16) + '…' : h.name}`;
+function rangeFor(p) {
+  const t = todayStr();
+  if (p === 'week') return [addDays(t, -parse(t).getDay()), t];
+  if (p === 'month') return [t.slice(0,8) + '01', t];
+  if (p === '30') return [addDays(t,-29), t];
+  return ['', ''];
+}
 function journalHTML() {
   const hs = S.habits.filter(h => ui.jf === 'all' || h.id === ui.jf);
-  const byDate = {};
+  const inR = d => (!ui.jfrom || d >= ui.jfrom) && (!ui.jto || d <= ui.jto);
+  const byDate = {}, sum = [];
   const push = (d, o) => (byDate[d] = byDate[d] || []).push(o);
   hs.forEach(h => {
-    doneDates(h.id).forEach(d => push(d, { h, kind:'done', n: noteOf(h.id, d), d }));
-    const sl = S.slips[h.id] || {};
-    Object.keys(sl).forEach(d => sl[d].forEach(s => push(d, { h, kind:'slip', s, d })));
+    const ds = doneDates(h.id).filter(inR);
+    ds.forEach(d => push(d, { h, kind:'done', n: noteOf(h.id, d) }));
+    let slips = 0; const sl = S.slips[h.id] || {};
+    Object.keys(sl).filter(inR).forEach(d => sl[d].forEach(s => { push(d, { h, kind:'slip', s }); slips++; }));
+    sum.push({ h, days: ds.length, slips, mins: ds.reduce((a,d) => a + ((noteOf(h.id, d) || {}).m || 0), 0) });
   });
   const dates = Object.keys(byDate).sort().reverse();
-  const shown = dates.slice(0, ui.jl);
+  const presets = [['week','이번 주'],['month','이번 달'],['30','최근 30일'],['all','전체']];
   const opts = `<option value="all">전체 습관</option>` + S.habits.map(h => `<option value="${esc(h.id)}" ${ui.jf === h.id ? 'selected' : ''}>${esc(h.emoji)} ${esc(h.name)}</option>`).join('');
-  let out = `<div class="jfilter"><select data-jf="1" aria-label="습관 선택">${opts}</select></div>`;
-  if (!dates.length) return out + `<div class="empty-msg">아직 기록이 없어요.<br>숲 화면에서 물을 주고 내용을 적으면 여기에 날짜별로 쌓여요.</div>`;
-  shown.forEach(d => {
+  const t = todayStr();
+  let out = `<div class="range">${presets.map(([k,l]) => `<button class="${ui.jp === k ? 'on' : ''}" data-act="jpreset" data-id="${k}">${l}</button>`).join('')}</div>
+    <div class="daterow"><input type="date" data-jfrom="1" value="${ui.jfrom}" max="${t}" aria-label="시작일"><span>~</span><input type="date" data-jto="1" value="${ui.jto}" max="${t}" aria-label="종료일"></div>
+    <div class="jfilter"><select data-jf="1" aria-label="습관 선택">${opts}</select></div>`;
+  const span = ui.jfrom && ui.jto ? diff(ui.jto, ui.jfrom) + 1 : null;
+  const chips = sum.filter(x => x.days || x.slips).map(x => x.h.kind === 'avoid'
+    ? `<span class="${x.slips ? 'bad' : ''}" title="${esc(x.h.name)}">${esc(x.h.emoji)} 지킴 ${x.days}일${x.slips ? ` · 못 지킴 ${x.slips}회` : ''}</span>`
+    : `<span title="${esc(x.h.name)}">${esc(x.h.emoji)} ${x.days}일${x.mins ? ` · ${fmtMin(x.mins)}` : ''}</span>`).join('');
+  if (!dates.length) return out + `<div class="empty-msg">이 기간에는 기록이 없어요.<br>기간을 넓히거나, 숲 화면에서 물을 주고 내용을 적어 보세요.</div>`;
+  out += `<div class="hint" style="margin:0 0 4px">${span ? `${span}일 중 기록이 있는 날 ${dates.length}일` : `기록이 있는 날 ${dates.length}일`}</div><div class="rsum">${chips}</div>`;
+  dates.forEach(d => {
     out += `<div class="jdate">${dateLabel(d)}</div>`;
     byDate[d].sort((a,b) => (a.kind === b.kind ? 0 : a.kind === 'slip' ? 1 : -1)).forEach(e => {
       const hid = esc(e.h.id);
@@ -436,8 +520,110 @@ function journalHTML() {
       }
     });
   });
-  if (dates.length > shown.length) out += `<button class="add" data-act="moreJournal">이전 기록 더 보기</button>`;
   return out;
+}
+
+/* ---------- 월간 리포트 ---------- */
+function ymAdd(ym, k) { const [y,m] = ym.split('-').map(Number); const d = new Date(y, m-1+k, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
+function monthInfo(ym) {
+  const [y,m] = ym.split('-').map(Number), n = new Date(y, m, 0).getDate(), tm = todayStr().slice(0,7);
+  return { ym, y, m, n, cur: ym === tm, elapsed: ym === tm ? parse(todayStr()).getDate() : (ym < tm ? n : 0) };
+}
+const monthDays = (id, ym) => doneDates(id).filter(d => d.startsWith(ym));
+function earliestYM() {
+  let e = todayStr().slice(0,7);
+  S.habits.forEach(h => { const ds = doneDates(h.id); if (ds.length && ds[0].slice(0,7) < e) e = ds[0].slice(0,7);
+    Object.keys(S.slips[h.id] || {}).forEach(d => { if (d.slice(0,7) < e) e = d.slice(0,7); }); });
+  return e;
+}
+function longestRun(dates) { let best = 0, run = 0, prev = null; dates.slice().sort().forEach(k => { run = (prev && diff(k, prev) === 1) ? run + 1 : 1; best = Math.max(best, run); prev = k; }); return best; }
+const deltaHTML = d => d === null ? '<span class="delta flat">—</span>' : `<span class="delta ${d > 0 ? 'up' : d < 0 ? 'down' : 'flat'}">${d > 0 ? '▲' : d < 0 ? '▼' : '±'}${Math.abs(d)}%p</span>`;
+
+function reportHTML() {
+  const mi = monthInfo(ui.rm), pm = monthInfo(ymAdd(ui.rm, -1)), hs = S.habits, N = hs.length;
+  const nav = `<div class="mnav"><button data-act="rprev" ${ui.rm <= earliestYM() ? 'disabled' : ''}>◀</button><b>${mi.y}년 ${mi.m}월</b><button data-act="rnext" ${mi.cur ? 'disabled' : ''}>▶</button></div>`;
+  if (!N) return nav + `<div class="empty-msg">나무를 먼저 심어 주세요.</div>`;
+  const per = hs.map(h => { const ds = monthDays(h.id, mi.ym), pd = monthDays(h.id, pm.ym);
+    return { h, ds, n: ds.length, rate: mi.elapsed ? ds.length / mi.elapsed : 0, prevRate: pd.length ? pd.length / pm.n : null }; });
+  const total = per.reduce((a,p) => a + p.n, 0);
+  const rate = mi.elapsed ? total / (N * mi.elapsed) : 0, pct = Math.round(rate * 100);
+  const prevTotal = hs.reduce((a,h) => a + monthDays(h.id, pm.ym).length, 0);
+  const delta = prevTotal ? pct - Math.round(prevTotal / (N * pm.n) * 100) : null;
+  const verdict = pct >= 80 ? '정말 꾸준한 한 달이었어요 👏' : pct >= 60 ? '좋은 흐름이에요. 조금만 더 채워 봐요' : pct >= 40 ? '절반 가까이 해냈어요. 쉬운 습관부터 다시 잡아 봐요' : '쉬어간 달이어도 괜찮아요. 가장 쉬운 것 하나부터 다시 시작해요';
+
+  // 일별 히트맵
+  const cnt = {}; per.forEach(p => p.ds.forEach(d => { cnt[d] = (cnt[d] || 0) + 1; }));
+  let heat = DOW.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < new Date(mi.y, mi.m-1, 1).getDay(); i++) heat += `<span></span>`;
+  for (let d = 1; d <= mi.n; d++) {
+    const ds = `${mi.ym}-${pad(d)}`, f = (cnt[ds] || 0) / N, fut = d > mi.elapsed;
+    heat += `<div class="c ${fut ? 'fut' : f === 0 ? '' : f <= .25 ? 'h1' : f <= .5 ? 'h2' : f <= .75 ? 'h3' : 'h4'}">${d}</div>`;
+  }
+  // 주차별 · 요일별
+  const chunks = [[1,7],[8,14],[15,21],[22,28]].concat(mi.n > 28 ? [[29, mi.n]] : []);
+  const weeks = chunks.map(([a,b], i) => { let c = 0, s = 0; for (let d = a; d <= Math.min(b, mi.elapsed); d++) { c++; s += cnt[`${mi.ym}-${pad(d)}`] || 0; } return [`${i+1}주`, c ? Math.round(s / (N*c) * 100) : null]; });
+  const wk = DOW.map(() => [0, 0]);
+  for (let d = 1; d <= mi.elapsed; d++) { const w = new Date(mi.y, mi.m-1, d).getDay(); wk[w][0] += cnt[`${mi.ym}-${pad(d)}`] || 0; wk[w][1]++; }
+  const wdRate = wk.map(([s,c], i) => ({ n: DOW[i], r: c ? Math.round(s / (N*c) * 100) : null })).filter(x => x.r !== null);
+  const bars = arr => `<div class="minibars">${arr.map(([n, v]) => `<div><b>${v === null ? '' : v + '%'}</b><i class="g" style="height:${v ? Math.max(v, 3) * .7 : 2}%"></i>${n}</div>`).join('')}</div>`;
+
+  // 습관별
+  const rows = per.map(p => `<div class="hrow"><div><div class="nm">${esc(p.h.emoji)} ${esc(p.h.name)}</div><div class="bar" style="margin-top:6px"><i style="width:${Math.round(p.rate*100)}%"></i></div></div>
+    <div class="rt"><b>${p.n}</b>/${mi.elapsed}일 · ${Math.round(p.rate*100)}%<br>${deltaHTML(p.prevRate === null ? null : Math.round(p.rate*100) - Math.round(p.prevRate*100))}</div></div>`).join('');
+
+  // 분석 문장
+  const ins = [];
+  ins.push(delta === null ? `전체 달성률은 <b>${pct}%</b>예요.` : `전체 달성률은 <b>${pct}%</b>예요. 지난달보다 <b>${delta > 0 ? '+' : ''}${delta}%p</b> ${delta > 0 ? '올랐어요' : delta < 0 ? '내려갔어요' : '같아요'}.`);
+  const ranked = per.filter(p => mi.elapsed).slice().sort((a,b) => b.rate - a.rate);
+  if (ranked.length > 1 && ranked[0].rate > 0) ins.push(`가장 꾸준한 습관은 <b>${esc(shortName(ranked[0].h))}</b> (${ranked[0].n}/${mi.elapsed}일)이에요.`);
+  const low = ranked[ranked.length-1];
+  if (ranked.length > 1 && low.rate < ranked[0].rate) ins.push(`가장 아쉬운 습관은 <b>${esc(shortName(low.h))}</b> (${low.n}/${mi.elapsed}일)이에요. 다음 달은 이 습관 하나만 더 챙겨 보세요.${low.h.plan ? ` 적어 둔 계획: “${esc(low.h.plan)}”` : ''}`);
+  if (wdRate.length >= 4) { const sw = wdRate.slice().sort((a,b) => a.r - b.r); if (sw[sw.length-1].r > sw[0].r) ins.push(`요일별로는 <b>${sw[0].n}요일</b>(${sw[0].r}%)이 가장 약하고 <b>${sw[sw.length-1].n}요일</b>(${sw[sw.length-1].r}%)이 가장 강해요.`); }
+  const runs = per.map(p => ({ h: p.h, r: longestRun(p.ds) })).sort((a,b) => b.r - a.r);
+  if (runs[0].r >= 3) ins.push(`이번 달 가장 길게 이어진 연속은 <b>${esc(runs[0].h.emoji)} ${runs[0].r}일</b>이에요. 🔥`);
+  // 태도
+  const avoid = hs.filter(h => h.kind === 'avoid');
+  const sl = avoid.flatMap(h => entriesOf(h).filter(e => e.date.startsWith(mi.ym)).map(e => ({ ...e, h })));
+  if (avoid.length && mi.elapsed) {
+    if (!sl.length) ins.push('마음가짐 습관에서 못 지킨 기록이 없어요. 👏');
+    else {
+      const top = freq(sl)[0];
+      const bk = [['새벽',0,5],['아침',6,11],['오후',12,17],['저녁',18,23]].map(([n,a,b]) => [n, sl.filter(e => e.at && +e.at.slice(0,2) >= a && +e.at.slice(0,2) <= b).length]).sort((a,b) => b[1] - a[1]);
+      ins.push(`못 지킨 기록은 총 <b>${sl.length}회</b>예요.${top ? ` 가장 흔한 상황은 “${esc(top.t)}”(${top.n}회)` : ''}${bk[0][1] ? `${top ? ', ' : ' '}시간대는 <b>${bk[0][0]}</b>에 가장 많았어요` : ''}.`);
+    }
+  }
+  // 한 일
+  const doEs = hs.filter(h => h.kind === 'do').flatMap(h => entriesOf(h).filter(e => e.date.startsWith(mi.ym)).map(e => ({ ...e, h })));
+  const mins = doEs.reduce((a,e) => a + (e.m || 0), 0);
+  if (mins) ins.push(`기록한 활동 시간은 총 <b>${fmtMin(mins)}</b>이에요.`);
+
+  // 못 지킨 상황 / 한 일 카드
+  let slipCard = '';
+  if (sl.length) {
+    slipCard = `<div class="card"><div class="rcard-title">🧘 못 지킨 상황 정리</div>` +
+      avoid.map(h => { const n = sl.filter(e => e.h.id === h.id).length; return `<div class="rank"><span>${esc(h.emoji)} ${esc(h.name)}</span><span>${n}회</span></div>`; }).join('') +
+      `<h4 style="font-size:14px;margin:12px 0 4px;color:var(--text2)">자주 나온 상황</h4>` + freq(sl).map(o => `<div class="rank"><span>${esc(o.t)}</span><span>${o.n}회</span></div>`).join('') + `</div>`;
+  }
+  let doCard = '';
+  const withT = hs.filter(h => h.kind === 'do').map(h => ({ h, es: doEs.filter(e => e.h.id === h.id) })).filter(x => x.es.some(e => e.t || e.m));
+  if (withT.length) {
+    doCard = `<div class="card"><div class="rcard-title">📚 한 일 정리</div>` + withT.map(({ h, es }) => {
+      const m = es.reduce((a,e) => a + (e.m || 0), 0), top = freq(es).slice(0,3);
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-weight:600;font-size:14px">${esc(h.emoji)} ${esc(h.name)}${m ? ` · ${fmtMin(m)}` : ''}</div>` +
+        top.map(o => `<div class="rank"><span>${esc(o.t)}</span><span>${o.n}일</span></div>`).join('') + `</div>`;
+    }).join('') + `</div>`;
+  }
+
+  return nav + `
+    <div class="card"><div class="bigrate"><b>${pct}%</b><span>${deltaHTML(delta)}<span class="hint"> 지난달 대비</span></span></div>
+      <div class="bar" style="margin:12px 0 8px"><i style="width:${pct}%"></i></div>
+      <div class="hint" style="margin:0">${mi.cur ? `${mi.elapsed}일 경과 · ` : ''}${N}그루 × ${mi.elapsed}일 중 ${total}번 물을 줬어요. ${verdict}</div></div>
+    <div class="card"><div class="rcard-title">🧠 이번 달 분석</div><ul class="insl">${ins.map(t => `<li>${t}</li>`).join('')}</ul></div>
+    <div class="card"><div class="rcard-title">🗓 하루하루 (물 준 습관 수)</div><div class="heat">${heat}</div>
+      <div class="hint">진할수록 그날 더 많은 습관을 해냈어요.</div></div>
+    <div class="card"><div class="rcard-title">📈 주차별 · 요일별 달성률</div>${bars(weeks)}<div style="height:14px"></div>${wdRate.length ? bars(wdRate.map(x => [x.n, x.r])) : ''}</div>
+    <div class="card"><div class="rcard-title">🌳 습관별 성적</div>${rows}</div>
+    ${slipCard}${doCard}`;
 }
 
 /* ---------- 시트 ---------- */
@@ -481,6 +667,18 @@ function recentListHTML(h) {
   }).join('') + `</div>`;
 }
 
+function streakPanel(h, st) {
+  const today = isDone(h.id, todayStr());
+  const next = MILESTONES.find(m => m > st.cur), prev = [...MILESTONES].reverse().find(m => m <= st.cur) || 0;
+  const head = st.cur > 0
+    ? `🔥 <b>${st.cur}일 연속</b> 중${today ? '' : ` · 오늘 ${h.kind === 'avoid' ? '지키면' : '하면'} ${st.cur+1}일째!`}`
+    : '🔥 오늘부터 새로운 연속 기록을 시작해요';
+  const bar = next
+    ? `<div class="bar"><i style="width:${st.cur ? Math.round((st.cur - prev) / (next - prev) * 100) : 0}%"></i></div><div style="font-size:12px;margin-top:6px">다음 배지 ${next}일까지 ${next - st.cur}일 남았어요</div>`
+    : `<div style="font-size:12px;margin-top:6px">모든 배지를 모았어요! 🏆</div>`;
+  return `<div class="streakbox">${head}${bar}<div class="badges">${MILESTONES.map(m => `<span class="badge ${m <= st.best ? 'on' : ''}">${m}일</span>`).join('')}</div></div>`;
+}
+
 function detailHTML(h) {
   const days = countDays(h.id), w = wiltLevel(h.id), si = stageIdx(days), st = streaks(h.id);
   const next = STAGES[si+1];
@@ -497,7 +695,7 @@ function detailHTML(h) {
   }
   return `
     <div class="sheet-head"><h3>${esc(h.emoji)} ${esc(h.name)}</h3><button class="icon-btn" data-act="close" aria-label="닫기">✕</button></div>
-    <div style="max-width:210px;margin:0 auto">${treeSVG(days, w, h.id)}</div>
+    <div style="max-width:210px;margin:0 auto">${treeSVG(days, w, h.id, st.cur)}</div>
     <div class="stage"><div class="nm">${STAGES[si][1]} · ${days} / ${GOAL}일</div>
       <div class="sub">${sub}${w > 0 ? ' · 물이 필요해요 💧' : ''}</div></div>
     <div class="bar"><i style="width:${Math.min(days/GOAL*100,100)}%"></i></div>
@@ -506,6 +704,7 @@ function detailHTML(h) {
       <div class="stat"><b>${st.best}일</b><span>최장 연속</span></div>
       <div class="stat"><b>${recentRate(h.id)}%</b><span>최근 30일</span></div>
     </div>
+    ${streakPanel(h, st)}
     ${insightHTML(h)}
     ${recentListHTML(h)}
     <label class="l" for="plan">나만의 실천 계획 (If → Then)</label>
@@ -593,7 +792,14 @@ function closeDay() { ui.day = null; if (ui.open) showDetail(ui.open); else clos
 
 /* ---------- 동작 ---------- */
 let toastTimer;
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); }
+function toast(msg, ms = 2400) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), ms); }
+function burst(emoji) {
+  for (let i = 0; i < 14; i++) {
+    const e = document.createElement('span'); e.className = 'burst'; e.textContent = emoji;
+    e.style.left = (8 + Math.random() * 84) + 'vw'; e.style.animationDelay = (Math.random() * .4) + 's';
+    document.body.appendChild(e); setTimeout(() => e.remove(), 2200);
+  }
+}
 
 let pendingAsk = null;
 function ask(msg, yes) {
@@ -602,9 +808,9 @@ function ask(msg, yes) {
   $('ask').classList.add('on');
 }
 
-// 반환값: 단계가 올라갔으면 true
+// 반환값: 축하 토스트를 이미 띄웠으면 true
 function setDone(id, date, val) {
-  const before = stageIdx(countDays(id));
+  const before = stageIdx(countDays(id)), s0 = streaks(id).cur;
   S.log[id] = S.log[id] || {};
   if (val) {
     S.log[id][date] = 1;
@@ -614,13 +820,17 @@ function setDone(id, date, val) {
     if (S.notes[id]) delete S.notes[id][date];          // 안 한 날로 바꾸면 적은 내용도 지워짐
   }
   save();
-  const after = stageIdx(countDays(id));
-  if (val && after > before) {
-    const h = habit(id);
-    toast(after === STAGES.length-1 ? `🎉 ${h.emoji} 500일 달성! 거목이 되었어요` : `🌱 ${h.emoji} 「${STAGES[after][1]}」 단계로 자랐어요!`);
-    return true;
-  }
-  return false;
+  if (!val) return false;
+  const h = habit(id), msgs = [];
+  const after = stageIdx(countDays(id)), s1 = streaks(id).cur;
+  const ms = s1 > s0 && MILESTONES.includes(s1);
+  if (after > before) msgs.push(after === STAGES.length-1 ? `🎉 ${h.emoji} 500일 달성! 거목이 되었어요` : `🌱 ${h.emoji} 「${STAGES[after][1]}」 단계로 자랐어요!`);
+  if (ms) msgs.push(`🔥 ${h.emoji} ${MS_MSG[s1]}`);
+  else if (s1 > s0 && s1 >= 2 && !msgs.length) msgs.push(`🔥 ${s1}일 연속! 오늘도 이어갔어요`);
+  if (!msgs.length) return false;
+  toast(msgs.join('\n'), ms || after > before ? 4200 : 2400);
+  if (ms) burst('🔥'); else if (after > before) burst('🌱');
+  return true;
 }
 
 function refresh() {
@@ -638,7 +848,7 @@ document.addEventListener('click', e => {
       const h = habit(id), date = ui.date, on = !isDone(id, date);
       if (on) {
         const sl = slipsOf(id, date).length;
-        const doIt = () => { setDone(id, date, true); render(); if (h.kind === 'do') showDay(id, date, true); };
+        const doIt = () => { const up = setDone(id, date, true); render(); if (h.kind === 'do') showDay(id, date, true); else if (!up) toast('오늘도 잘 지켰어요 👏'); };
         if (sl) ask(`이날 못 지킨 기록 ${sl}건이 지워져요. 지켰어요로 바꿀까요?`, doIt); else doIt();
       } else {
         const hasNote = h.kind === 'do' && noteOf(id, date);
@@ -683,7 +893,9 @@ document.addEventListener('click', e => {
       save(); render(); showDay(hid, date);
       break;
     }
-    case 'moreJournal': ui.jl += 30; render(); break;
+    case 'jpreset': { ui.jp = id; [ui.jfrom, ui.jto] = rangeFor(id); render(); break; }
+    case 'rprev': if (ui.rm > earliestYM()) { ui.rm = ymAdd(ui.rm, -1); render(); } break;
+    case 'rnext': if (ui.rm < todayStr().slice(0,7)) { ui.rm = ymAdd(ui.rm, 1); render(); } break;
     case 'open': ui.cal = ui.date.slice(0,7); showDetail(id); break;
     case 'close': closeSheet(); break;
     case 'prevDay': ui.date = addDays(ui.date,-1); render(); break;
@@ -723,7 +935,12 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset && t.dataset.plan) { const h = habit(t.dataset.plan); if (h) { h.plan = t.value.trim(); save(); toast('실천 계획을 저장했어요'); } }
-  if (t.dataset && t.dataset.jf) { ui.jf = t.value; ui.jl = 30; render(); }
+  if (t.dataset && t.dataset.jf) { ui.jf = t.value; render(); }
+  if (t.dataset && (t.dataset.jfrom || t.dataset.jto)) {
+    if (t.dataset.jfrom) ui.jfrom = t.value; else ui.jto = t.value;
+    if (ui.jfrom && ui.jto && ui.jfrom > ui.jto) [ui.jfrom, ui.jto] = [ui.jto, ui.jfrom];
+    ui.jp = 'custom'; render();
+  }
 });
 
 $('importFile').addEventListener('change', e => {
