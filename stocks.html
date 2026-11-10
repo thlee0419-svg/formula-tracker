@@ -433,6 +433,21 @@
 
   <div id="recFlows" style="display:none">
   <div class="card">
+    <div class="card-label">계좌 간 이체 (원화 계좌끼리)</div>
+    <div class="form-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1.2fr) auto">
+      <div class="field"><label>날짜</label><input type="date" id="tDate"></div>
+      <div class="field"><label>보내는 계좌</label><select id="tFrom" onchange="xferPreview()"></select></div>
+      <div class="field"><label>받는 계좌</label><select id="tTo" onchange="xferPreview()"></select></div>
+      <div class="field"><label>이체 금액 (원)</label><input type="number" id="tAmt" min="0" step="any" inputmode="decimal" oninput="xferPreview()"></div>
+      <div class="field"><label>수수료 (원)</label><input type="number" id="tFee" min="0" step="any" inputmode="decimal" placeholder="0" oninput="xferPreview()"></div>
+      <div class="field"><label>메모</label><input id="tMemo" placeholder="예: 생활비 이동"></div>
+      <button class="btn" onclick="addTransfer()">이체 기록</button>
+    </div>
+    <div class="plan-preview" id="xferPreview">이체 금액은 받는 계좌에 들어간 금액이고, 수수료는 보내는 계좌에서 따로 빠져나간 금액이에요.</div>
+    <div class="note">이체는 총자산과 총손익을 바꾸지 않고, 계좌별 손익만 보정해요. 수수료는 보내는 계좌의 손실로 반영되고 "누적 출금(회수)"에는 들어가지 않아요. 현금 잔고는 직접 고쳐 주세요. (신한 달러 계좌와의 환전 이체는 지원하지 않아요.)</div>
+  </div>
+
+  <div class="card">
     <div class="card-label">입출금 · 현금 잔고</div>
     <div class="form-grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) auto">
       <div class="field"><label>계좌</label><select id="cAcct"></select></div>
@@ -480,12 +495,12 @@ const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
 const DEFAULT_SECTORS = ['반도체','IT/소프트웨어','인터넷/플랫폼','2차전지','자동차','바이오/헬스케어','금융','에너지','소비재','통신','산업재','방산','부동산/리츠','ETF(지수)','ETF(섹터)','기타'];
-let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], trade: { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0 } };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], transfers: [], trade: { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0 } };
 function normalize() {
   state.holdings = state.holdings || []; state.realized = state.realized || [];
   state.snapshots = state.snapshots || []; state.flows = state.flows || []; state.daily = state.daily || [];
   state.cash = state.cash || {};
-  state.plans = state.plans || []; state.trades = state.trades || []; state.journal = state.journal || [];
+  state.plans = state.plans || []; state.trades = state.trades || []; state.journal = state.journal || []; state.transfers = state.transfers || [];
   state.trade = { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0, ...(state.trade || {}) };
   if (!Array.isArray(state.sectors)) state.sectors = DEFAULT_SECTORS.slice();
 }
@@ -628,7 +643,7 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], trade: d.trade || {} };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], transfers: Array.isArray(d.transfers) ? d.transfers : [], trade: d.trade || {} };
       normalize();
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
@@ -719,6 +734,15 @@ function goHoldings(accountId) { filter = accountId; showPage('holdings'); }
 function flowSum(accId, type, upToMonth) {
   return state.flows.reduce((sum, f) => (f.account === accId && f.type === type && (!upToMonth || f.date.slice(0, 7) <= upToMonth)) ? sum + toKRW(f.amount, accId) : sum, 0);
 }
+function xferSum(accId, upToMonth) {                             // 계좌 간 이체 합계 (원화 계좌끼리만)
+  const r = { in: 0, out: 0, fee: 0 };
+  state.transfers.forEach(t => {
+    if (upToMonth && t.date.slice(0, 7) > upToMonth) return;
+    if (t.to === accId) r.in += t.amount;                          // 받는 계좌: 들어온 금액
+    if (t.from === accId) { r.out += t.amount + (t.fee || 0); r.fee += t.fee || 0; }   // 보내는 계좌: 나간 금액(수수료 포함)
+  });
+  return r;
+}
 function compute() {
   const per = Object.fromEntries(ACCOUNTS.map(a => [a.id, { value:0, cost:0, realized:0 }]));
   state.holdings.forEach(h => {
@@ -732,10 +756,11 @@ function compute() {
     const p = per[a.id];
     p.cash = toKRW(Number(state.cash[a.id]) || 0, a.id);
     p.dep = flowSum(a.id, 'in'); p.wd = flowSum(a.id, 'out');
+    const xs = xferSum(a.id); p.tIn = xs.in; p.tOut = xs.out; p.fee = xs.fee;
     p.hasDep = state.flows.some(f => f.account === a.id && f.type === 'in');
     p.unreal = p.value - p.cost; p.ret = p.cost ? p.unreal / p.cost * 100 : 0;
-    p.perf = p.hasDep ? p.value + p.cash + p.wd - p.dep : p.unreal + p.realized;
-    p.base = p.hasDep ? p.dep : p.cost;
+    p.perf = (p.hasDep ? p.value + p.cash + p.wd + p.tOut - p.dep - p.tIn : p.unreal + p.realized) - p.fee;   // 이체는 중립, 수수료만 손실
+    p.base = p.hasDep ? p.dep + p.tIn : p.cost;
     p.perfRet = p.base ? p.perf / p.base * 100 : 0;
     for (const k of ['value','cost','realized','cash','dep','wd','perf','base']) total[k] += p[k];
   });
@@ -753,7 +778,7 @@ function render() {
   const fill = (id) => { const s = document.getElementById(id); if (!s.options.length) s.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name} (${a.role})</option>`).join(''); };
   fill('fAcct'); fill('rAcct'); fill('cAcct');
   const today = new Date().toISOString().slice(0,10);
-  ['rDate','cDate'].forEach(i => { const e = document.getElementById(i); if (!e.value) e.value = today; });
+  ['rDate','cDate','tDate'].forEach(i => { const e = document.getElementById(i); if (!e.value) e.value = today; });
 
   document.getElementById('summary').innerHTML = `
     <div class="stat s1"><div class="stat-label">총 평가금액</div><div class="stat-value">${fmtKRW(total.value)}</div><div class="stat-sub" style="color:var(--text-muted)">투자원금 ${fmtKRW(total.cost)}${total.cash ? ` · 현금 ${fmtKRW(total.cash)}` : ''}</div></div>
@@ -848,6 +873,31 @@ function setCash(id, v) {
   const n = parseFloat(v);
   state.cash[id] = n >= 0 ? n : 0; persist(); render();
 }
+/* ---------- 계좌 간 이체 ---------- */
+function fillXferSelects() {
+  const krw = ACCOUNTS.filter(a => a.cur === 'KRW');
+  ['tFrom', 'tTo'].forEach((id, i) => { const el = document.getElementById(id); if (!el.options.length) { el.innerHTML = krw.map(a => `<option value="${a.id}">${a.name}</option>`).join(''); el.selectedIndex = Math.min(i, krw.length - 1); } });
+}
+function xferPreview() {
+  const from = val('tFrom'), to = val('tTo'), amt = num('tAmt'), fee = num('tFee') || 0, el = document.getElementById('xferPreview');
+  if (!(amt > 0)) { el.textContent = '이체 금액은 받는 계좌에 들어간 금액이고, 수수료는 보내는 계좌에서 따로 빠져나간 금액이에요.'; return; }
+  if (from === to) { el.textContent = '보내는 계좌와 받는 계좌가 같아요.'; return; }
+  el.innerHTML = `현금 잔고를 이렇게 고쳐 주세요 → <b>${ACCT[from].name} −${won(amt + fee)}</b>, <b>${ACCT[to].name} +${won(amt)}</b>` + (fee > 0 ? ` · 수수료 ${won(fee)}은 ${ACCT[from].name}의 손실로 반영돼요` : '');
+}
+function addTransfer() {
+  const date = val('tDate'), from = val('tFrom'), to = val('tTo'), amount = num('tAmt'), fee = num('tFee') || 0;
+  if (!date || !(amount > 0)) { alert('날짜와 이체 금액을 입력해 주세요.'); return; }
+  if (from === to) { alert('보내는 계좌와 받는 계좌가 달라야 해요.'); return; }
+  if (!(fee >= 0)) { alert('수수료는 0 이상이어야 해요.'); return; }
+  state.transfers.push({ id: uid(), date, from, to, amount, fee, memo: val('tMemo').trim() });
+  document.getElementById('tAmt').value = ''; document.getElementById('tFee').value = ''; document.getElementById('tMemo').value = '';
+  persist(); render();
+}
+function delTransfer(id) {
+  if (!confirm('이 이체 기록을 삭제할까요?\n(현금 잔고는 바뀌지 않으니 직접 고쳐 주세요)')) return;
+  state.transfers = state.transfers.filter(t => t.id !== id); persist(); render();
+}
+
 function renderFlows() {
   const grid = document.getElementById('cashGrid');
   if (!grid.children.length || grid.dataset.v !== JSON.stringify(state.cash)) {
@@ -856,10 +906,15 @@ function renderFlows() {
       grid.dataset.v = JSON.stringify(state.cash);
     }
   }
-  const rows = state.flows.filter(f => ACCT[f.account]).slice().sort((a, b) => b.date.localeCompare(a.date));
-  if (!rows.length) { document.getElementById('flows').innerHTML = '<div class="empty">입출금 기록이 없습니다.</div>'; return; }
+  fillXferSelects();
+  const rows = state.flows.filter(f => ACCT[f.account]).map(f => ({ ...f, kind: 'flow' })).concat(state.transfers.filter(t => ACCT[t.from] && ACCT[t.to]).map(t => ({ ...t, kind: 'xfer' })))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  if (!rows.length) { document.getElementById('flows').innerHTML = '<div class="empty">입출금·이체 기록이 없습니다.</div>'; return; }
   document.getElementById('flows').innerHTML = `<table><thead><tr><th>날짜</th><th>계좌</th><th style="text-align:left">구분</th><th>금액</th><th style="text-align:left">메모</th><th></th></tr></thead><tbody>` +
-    rows.map(f => { const a = ACCT[f.account];
+    rows.map(f => { if (f.kind === 'xfer') return `<tr><td>${esc(f.date)}</td><td style="text-align:left;white-space:nowrap"><span class="dot" style="--c:${ACCT[f.from].color}"></span>${ACCT[f.from].name} → <span class="dot" style="--c:${ACCT[f.to].color}"></span>${ACCT[f.to].name}</td>
+        <td style="text-align:left">이체</td><td>${Math.round(f.amount).toLocaleString('ko-KR')}</td><td style="text-align:left">${esc(f.memo || '')}${f.fee > 0 ? ` <span class="tag">수수료 ${Math.round(f.fee).toLocaleString('ko-KR')}원</span>` : ''}</td>
+        <td><button class="del" onclick="delTransfer('${f.id}')" title="삭제">✕</button></td></tr>`;
+      const a = ACCT[f.account];
       return `<tr><td>${esc(f.date)}</td><td style="text-align:left"><span class="dot" style="--c:${a.color}"></span>${a.name}</td>
         <td style="text-align:left">${f.type === 'in' ? '입금' : '출금'}</td><td>${fmtNum(f.amount, a.cur)}</td><td style="text-align:left">${esc(f.memo)}</td>
         <td><button class="del" onclick="delFlow('${f.id}')" title="삭제">✕</button></td></tr>`; }).join('') + '</tbody></table>';
@@ -1513,13 +1568,13 @@ function monthlyRows() {
     let value = 0, base = 0, total = 0, wd = 0;
     ids.forEach(id => {
       const x = sn.accounts[id]; if (!x) return;
-      const cash = x.cash || 0, out = flowSum(id, 'out', sn.month), inn = flowSum(id, 'in', sn.month);
+      const cash = x.cash || 0, out = flowSum(id, 'out', sn.month), inn = flowSum(id, 'in', sn.month), xs = xferSum(id, sn.month);
       value += x.value + cash; wd += out;
-      if (hasDep(id)) { total += x.value + cash + out - inn; base += inn; }
+      if (hasDep(id)) { total += x.value + cash + out + xs.out - inn - xs.in - xs.fee; base += inn + xs.in; }
       else {
         let realized = 0;
         state.realized.forEach(r => { if (r.account === id && r.date.slice(0, 7) <= sn.month) realized += toKRW(r.amount, id); });
-        total += x.value - x.cost + realized; base += x.cost;
+        total += x.value - x.cost + realized - xs.fee; base += x.cost;
       }
     });
     const row = { month: sn.month, value, wd, total, ret: base ? total / base * 100 : 0, delta: prev === null ? null : total - prev };
