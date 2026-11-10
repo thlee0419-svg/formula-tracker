@@ -209,6 +209,7 @@
     .pc-levels { grid-template-columns: repeat(2, minmax(0,1fr)); }
   }
   /* ---------- 매매 일지 ---------- */
+  .dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .mini { padding: 4px 9px; font-size: 12px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; cursor: pointer; white-space: nowrap; }
   .mini:hover { background: var(--surface-muted); }
   .mini.buy { color: var(--up); } .mini.sell { color: var(--down); }
@@ -317,6 +318,17 @@
   </div>
 
   <div class="card" id="cashCard"></div>
+
+  <div class="card" id="feeCard">
+    <div class="card-label">수수료·세금 기본값 (매수·매도 기록 창에 자동 입력)</div>
+    <div class="rule-grid">
+      <div class="field"><label>국내 수수료율 (%)</label><input id="fKrComm" type="number" step="0.001" min="0" inputmode="decimal" onchange="setFee('krComm', this.value)"></div>
+      <div class="field"><label>국내 매도 거래세율 (%)</label><input id="fKrTax" type="number" step="0.001" min="0" inputmode="decimal" onchange="setFee('krTax', this.value)"></div>
+      <div class="field"><label>해외 수수료율 (%)</label><input id="fUsComm" type="number" step="0.001" min="0" inputmode="decimal" onchange="setFee('usComm', this.value)"></div>
+      <div class="field"><label>해외 매도 세금율 (%)</label><input id="fUsTax" type="number" step="0.001" min="0" inputmode="decimal" onchange="setFee('usTax', this.value)"></div>
+    </div>
+    <div class="note">입력된 값은 <b>예시</b>예요. 증권사·계좌 종류·이벤트·시기에 따라 다르니 실제 수수료율과 거래세율(농어촌특별세 포함)로 바꿔 주세요. 기록 창에서 금액을 직접 고칠 수도 있어요. 수수료는 매수 시 평균 매수가에 포함되고, 매도 시 수수료·세금은 실현손익에서 빠져요.</div>
+  </div>
 
   <div class="card">
     <div class="card-label">섹터 목록 관리</div>
@@ -495,12 +507,13 @@ const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
 const DEFAULT_SECTORS = ['반도체','IT/소프트웨어','인터넷/플랫폼','2차전지','자동차','바이오/헬스케어','금융','에너지','소비재','통신','산업재','방산','부동산/리츠','ETF(지수)','ETF(섹터)','기타'];
-let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], transfers: [], trade: { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0 } };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], transfers: [], fees: { krComm: 0.015, krTax: 0.15, usComm: 0.25, usTax: 0 }, trade: { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0 } };
 function normalize() {
   state.holdings = state.holdings || []; state.realized = state.realized || [];
   state.snapshots = state.snapshots || []; state.flows = state.flows || []; state.daily = state.daily || [];
   state.cash = state.cash || {};
   state.plans = state.plans || []; state.trades = state.trades || []; state.journal = state.journal || []; state.transfers = state.transfers || [];
+  state.fees = { krComm: 0.015, krTax: 0.15, usComm: 0.25, usTax: 0, ...(state.fees || {}) };
   state.trade = { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0, ...(state.trade || {}) };
   if (!Array.isArray(state.sectors)) state.sectors = DEFAULT_SECTORS.slice();
 }
@@ -643,7 +656,7 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], transfers: Array.isArray(d.transfers) ? d.transfers : [], trade: d.trade || {} };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], transfers: Array.isArray(d.transfers) ? d.transfers : [], fees: d.fees || {}, trade: d.trade || {} };
       normalize();
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
@@ -809,6 +822,7 @@ function render() {
   renderRecords();
   renderHoldings();
   renderCashSection();
+  renderFeeCard();
   renderFlows();
   renderRealized();
 }
@@ -1146,21 +1160,35 @@ function openEntry(id) {
   const p = state.plans.find(x => x.id === id); if (!p) return;
   const c = calcPlan(p, tradeBase());
   openDlg(`<h3>진입 완료 — ${esc(p.name)}</h3>
-    <label>체결 평균가 (원)<input id="dEntry" type="number" step="any" inputmode="decimal" value="${p.entry}"></label>
-    <label>수량 (주)<input id="dQty" type="number" step="any" inputmode="decimal" value="${c.valid ? c.qty : ''}"></label>
+    <label>체결 평균가 (원)<input id="dEntry" type="number" step="any" inputmode="decimal" value="${p.entry}" oninput="entryPreview('${id}')"></label>
+    <label>수량 (주)<input id="dQty" type="number" step="any" inputmode="decimal" value="${c.valid ? c.qty : ''}" oninput="entryPreview('${id}')"></label>
     <label>진입일<input id="dDate" type="date" value="${todayStr()}"></label>
-    <div class="note" style="margin:0 0 .5rem">미래에셋 계좌의 보유 종목에 추가되고 손절가·목표가가 함께 붙어요. 현금 잔고는 자동으로 줄지 않으니 필요하면 직접 고쳐 주세요.</div>
+    ${costRow('d', 'buy', `entryPreview('${id}')`)}
+    <div class="plan-preview" id="dPreview" style="margin:0 0 10px"></div>
+    ${cashCheck('entryCash', '매수 대금(수수료 포함)을 미래에셋 예수금에서 빼기', `entryPreview('${id}')`)}
+    <div class="note" style="margin:0 0 .5rem">미래에셋 계좌의 보유 종목에 추가되고 손절가·목표가가 함께 붙어요. 수수료는 평균 매수가에 포함돼요.</div>
     <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn" onclick="confirmEntry('${id}')">진입 기록</button></div>`);
+  entryPreview(id);
+}
+function entryPreview(id) {
+  const avg = num('dEntry'), qty = num('dQty'), el = document.getElementById('dPreview');
+  if (!(avg > 0) || !(qty > 0)) { el.textContent = '체결가와 수량을 입력하면 예수금 변화를 계산해요.'; return; }
+  autoCosts('d', 'mirae', 'buy', avg * qty);
+  const { fee } = readCosts('d'), have = Number(state.cash.mirae) || 0, cost = avg * qty + fee;
+  el.innerHTML = `매수 금액 ${fmtCash(avg * qty, 'mirae')}${fee > 0 ? ` + 수수료 ${fmtCash(fee, 'mirae')} · 수수료 포함 평균 <b>${fmtCash(cost / qty, 'mirae')}</b>` : ''}` +
+    (checked('entryCash') ? `<br>예수금 ${fmtCash(have, 'mirae')} → <b>${fmtCash(Math.max(have - cost, 0), 'mirae')}</b>${have < cost ? ' <b class="bad">(예수금이 부족해 0까지만 차감돼요)</b>' : ''}` : '');
 }
 function confirmEntry(id) {
   const p = state.plans.find(x => x.id === id); if (!p) return;
-  const avg = num('dEntry'), qty = num('dQty'), date = document.getElementById('dDate').value || todayStr();
-  if (!(avg > 0) || !(qty > 0)) { alert('체결가와 수량을 입력해 주세요.'); return; }
-  const hid = uid();
-  state.holdings.push({ id: hid, account: 'mirae', name: p.name, ticker: p.ticker, sector: '', qty, avg, cur: p.cur > 0 ? p.cur : avg,
+  const price = num('dEntry'), qty = num('dQty'), date = document.getElementById('dDate').value || todayStr();
+  if (!(price > 0) || !(qty > 0)) { alert('체결가와 수량을 입력해 주세요.'); return; }
+  const { fee } = readCosts('d'), toCash = checked('entryCash'), avg = (price * qty + fee) / qty, hid = uid();
+  state.holdings.push({ id: hid, account: 'mirae', name: p.name, ticker: p.ticker, sector: '', qty, avg, cur: p.cur > 0 ? p.cur : price,
     stop: p.stop, stop0: p.stop, t1: p.t1, t2: p.t2 || 0, t1pct: p.t1pct || 50, setup: p.setup, planId: p.id, entryDate: date });
   p.status = 'entered'; p.holdingId = hid;
-  addJournal({ type: 'buy', source: 'plan', date, account: 'mirae', name: p.name, ticker: p.ticker || '', price: avg, qty, holdingId: hid,
+  const used = toCash ? Math.min(Number(state.cash.mirae) || 0, price * qty + fee) : 0;
+  if (used > 0) addCash('mirae', -used);                            // 매수 대금 → 예수금 차감
+  addJournal({ type: 'buy', source: 'plan', cashUsed: used, fee, date, account: 'mirae', name: p.name, ticker: p.ticker || '', price, qty, holdingId: hid,
     reason: p.note || '', tags: [p.setup].filter(Boolean) });
   closeDlg(); trTab = 'pos'; persist(); render();
 }
@@ -1176,8 +1204,9 @@ function openExit(id) {
   openDlg(`<h3>청산 기록 — ${esc(h.name)}</h3>
     <label>청산가 (원)<input id="xPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="exitPreview('${id}')"></label>
     <label>청산 수량 (보유 ${h.qty.toLocaleString('ko-KR')}주, 분할 청산은 일부만)<input id="xQty" type="number" step="any" inputmode="decimal" value="${h.qty}" oninput="exitPreview('${id}')"></label>
+    ${costRow('x', 'sell', `exitPreview('${id}')`)}
     <div class="plan-preview" id="xPreview" style="margin:0 0 10px"></div>
-    ${cashCheck('exitCash', `청산 대금을 ${ACCT[h.account].name} 예수금에 더하기`)}
+    ${cashCheck('exitCash', `청산 대금(수수료·세금 제외)을 ${ACCT[h.account].name} 예수금에 더하기`, `exitPreview('${id}')`)}
     <label>청산일<input id="xDate" type="date" value="${todayStr()}"></label>
     <label>사유<select id="xReason"><option>목표가 도달</option><option>손절</option><option>추세 이탈(추적 손절)</option><option>기타</option></select></label>
     <label>메모<input id="xMemo" placeholder="복기용 메모 (선택)"></label>
@@ -1188,25 +1217,27 @@ function openExit(id) {
 function exitPreview(id) {
   const h = state.holdings.find(x => x.id === id), p = num('xPrice'), q = num('xQty'), el = document.getElementById('xPreview');
   if (!h || !(p > 0) || !(q > 0)) { el.textContent = '청산가와 수량을 입력하면 실현손익과 예수금 변화를 계산해요.'; return; }
-  const pnl = (p - h.avg) * q, have = Number(state.cash[h.account]) || 0;
-  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)}</b>${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}<br>청산 대금 ${fmtCash(p * q, h.account)} → 예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(have + p * q, h.account)}</b>`;
+  autoCosts('x', h.account, 'sell', p * q);
+  const { fee, tax } = readCosts('x'), pnl = (p - h.avg) * q - fee - tax, net = p * q - fee - tax, have = Number(state.cash[h.account]) || 0;
+  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)}</b>${fee + tax > 0 ? ` · 수수료·세금 ${fmtCash(fee + tax, h.account)} 반영` : ''}${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}` +
+    (checked('exitCash') ? `<br>입금액 ${fmtCash(net, h.account)} → 예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(have + net, h.account)}</b>` : '');
 }
 function confirmExit(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
   const exit = num('xPrice'), qty = num('xQty'), date = document.getElementById('xDate').value || todayStr();
   if (!(exit > 0) || !(qty > 0)) { alert('청산가와 수량을 입력해 주세요.'); return; }
   if (qty > h.qty + 1e-9) { alert('보유 수량보다 많이 청산할 수 없어요.'); return; }
-  const pnl = Math.round((exit - h.avg) * qty), risk0 = h.avg - (h.stop0 || 0);
+  const { fee, tax } = readCosts('x'), toCash = checked('exitCash');
+  const pnl = Math.round((exit - h.avg) * qty - fee - tax), net = exit * qty - fee - tax, risk0 = h.avg - (h.stop0 || 0);
   const realizedId = uid();
-  state.trades.push({ id: uid(), date, entryDate: h.entryDate || '', name: h.name, ticker: h.ticker || '', setup: h.setup || '', entry: h.avg, exit, qty,
-    stop0: h.stop0 || 0, pnl, R: h.stop0 > 0 && risk0 > 0 ? (exit - h.avg) / risk0 : null,
+  state.trades.push({ id: uid(), date, entryDate: h.entryDate || '', name: h.name, ticker: h.ticker || '', setup: h.setup || '', entry: h.avg, exit, qty, fee, tax,
+    stop0: h.stop0 || 0, pnl, R: h.stop0 > 0 && risk0 > 0 ? (pnl / qty) / risk0 : null,           // R은 수수료·세금 반영 후 기준
     reason: document.getElementById('xReason').value, memo: document.getElementById('xMemo').value.trim(), realizedId });
   state.realized.push({ id: realizedId, account: 'mirae', date, name: `${h.name} 청산`, amount: pnl });
-  const toCash = document.getElementById('exitCash') && document.getElementById('exitCash').checked;
-  if (toCash) addCash('mirae', exit * qty);                       // 청산 대금 → 예수금
+  if (toCash) addCash('mirae', net);                                // 청산 대금(비용 제외) → 예수금
   const xMemo = document.getElementById('xMemo').value.trim();
-  addJournal({ type: 'sell', source: 'trade', cashAdded: !!toCash, date, account: 'mirae', name: h.name, ticker: h.ticker || '', price: exit, qty, avgBefore: h.avg, pnl,
-    ret: h.avg ? (exit / h.avg - 1) * 100 : 0, holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId,
+  addJournal({ type: 'sell', source: 'trade', cashAdded: toCash, fee, tax, date, account: 'mirae', name: h.name, ticker: h.ticker || '', price: exit, qty, avgBefore: h.avg, pnl,
+    ret: h.avg ? pnl / (h.avg * qty) * 100 : 0, holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId,
     reason: document.getElementById('xReason').value + (xMemo ? ` — ${xMemo}` : ''), followed: parseFollowed(val('xFollow')), tags: [h.setup].filter(Boolean) });
   h.qty -= qty;
   if (h.qty <= 1e-9) state.holdings = state.holdings.filter(x => x.id !== id);
@@ -1371,8 +1402,31 @@ function holdDays(entryDate, date) {
   const d = (new Date(date) - new Date(entryDate)) / 86400000;
   return d >= 0 ? Math.round(d) : null;
 }
-function addCash(acctId, amount) { state.cash[acctId] = Math.round(((Number(state.cash[acctId]) || 0) + amount) * 100) / 100; }
-const cashCheck = (id, text) => `<label style="flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:13px"><input type="checkbox" id="${id}" checked style="width:auto;min-height:0">${text}</label>`;
+function addCash(acctId, delta, floorZero) {
+  let v = (Number(state.cash[acctId]) || 0) + delta;
+  if (floorZero) v = Math.max(v, 0);                                 // 예수금을 입력해 두지 않은 경우 음수가 되지 않게
+  state.cash[acctId] = Math.round(v * 100) / 100;
+}
+const cashCheck = (id, text, onchange) => `<label style="flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:13px"><input type="checkbox" id="${id}" checked style="width:auto;min-height:0" ${onchange ? `onchange="${onchange}"` : ''}>${text}</label>`;
+function calcCosts(acctId, side, gross) {                             // 비율 설정으로 수수료·세금 금액 계산
+  const usd = ACCT[acctId].cur === 'USD', f = state.fees, rnd = v => usd ? Math.round(v * 100) / 100 : Math.round(v);
+  return { fee: rnd(gross * (usd ? f.usComm : f.krComm) / 100), tax: side === 'sell' ? rnd(gross * (usd ? f.usTax : f.krTax) / 100) : 0 };
+}
+function costRow(prefix, side, handler) {
+  const f = (suffix, label) => `<label>${label}<input id="${prefix}${suffix}" type="number" step="any" min="0" inputmode="decimal" placeholder="0" oninput="this.dataset.dirty=1;${handler}"></label>`;
+  return `<div class="dlg-row">${f('Fee', '수수료')}${side === 'sell' ? f('Tax', '거래세·세금') : ''}</div>`;
+}
+function autoCosts(prefix, acctId, side, gross) {                      // 직접 고치기 전까지만 자동 입력
+  const c = calcCosts(acctId, side, gross);
+  [['Fee', c.fee], ['Tax', c.tax]].forEach(([k, v]) => { const el = document.getElementById(prefix + k); if (el && !el.dataset.dirty) el.value = gross > 0 && v > 0 ? v : ''; });
+}
+const readCost = id => { const el = document.getElementById(id); return el ? Math.max(parseFloat(el.value) || 0, 0) : 0; };   // 없는 칸(매수의 세금)은 0
+const readCosts = prefix => ({ fee: readCost(prefix + 'Fee'), tax: readCost(prefix + 'Tax') });
+const checked = id => !!(document.getElementById(id) && document.getElementById(id).checked);
+function setFee(k, v) { const n = parseFloat(v); if (n >= 0) { state.fees[k] = n; persist(); } render(); }
+function renderFeeCard() {
+  [['fKrComm', 'krComm'], ['fKrTax', 'krTax'], ['fUsComm', 'usComm'], ['fUsTax', 'usTax']].forEach(([id, k]) => { const el = document.getElementById(id); if (document.activeElement !== el) el.value = state.fees[k]; });
+}
 function addJournal(e) { state.journal.push({ id: uid(), source: 'holding', followed: null, tags: [], reason: '', review: '', ...e }); }
 
 /* 매수 기록: 수량 증가 + 평균 매수가 재계산 + 일지 */
@@ -1383,7 +1437,9 @@ function openBuy(id) {
     <label>매수일<input id="bDate" type="date" value="${todayStr()}"></label>
     <label>매수가${ACCT[h.account].cur === 'USD' ? ' ($)' : ' (원)'}<input id="bPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="buyPreview('${id}')"></label>
     <label>수량 (주)<input id="bQty" type="number" step="any" inputmode="decimal" oninput="buyPreview('${id}')"></label>
+    ${costRow('b', 'buy', `buyPreview('${id}')`)}
     <div class="plan-preview" id="bPreview" style="margin:0 0 10px">매수가와 수량을 입력하면 새 평균 매수가를 계산해요.</div>
+    ${cashCheck('buyCash', `매수 대금(수수료 포함)을 ${ACCT[h.account].name} 예수금에서 빼기`, `buyPreview('${id}')`)}
     <label>매매 사유<textarea id="jReason" rows="3" placeholder="왜 샀나요? (근거, 차트 자리, 뉴스 등)"></textarea></label>
     <label>원칙 준수 여부<select id="jFollow">${FOLLOW_OPTS(null)}</select></label>
     ${tagField('jTags', [])}
@@ -1392,23 +1448,27 @@ function openBuy(id) {
 function buyPreview(id) {
   const h = state.holdings.find(x => x.id === id), p = num('bPrice'), q = num('bQty'), el = document.getElementById('bPreview');
   if (!h || !(p > 0) || !(q > 0)) { el.textContent = '매수가와 수량을 입력하면 새 평균 매수가를 계산해요.'; return; }
-  const n = h.qty + q, a = (h.avg * h.qty + p * q) / n;
-  el.innerHTML = `매수 후 <b>${n.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주</b> · 새 평균 매수가 <b>${fmtCash(a, h.account)}</b> (이번 매수 금액 ${fmtCash(p * q, h.account)})`;
+  autoCosts('b', h.account, 'buy', p * q);
+  const { fee } = readCosts('b'), n = h.qty + q, a = (h.avg * h.qty + p * q + fee) / n, have = Number(state.cash[h.account]) || 0, cost = p * q + fee;
+  el.innerHTML = `매수 후 <b>${n.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주</b> · 수수료 포함 새 평균 <b>${fmtCash(a, h.account)}</b> (매수 금액 ${fmtCash(p * q, h.account)}${fee > 0 ? ` + 수수료 ${fmtCash(fee, h.account)}` : ''})` +
+    (checked('buyCash') ? `<br>예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(Math.max(have - cost, 0), h.account)}</b>${have < cost ? ' <b class="bad">(예수금이 부족해 0까지만 차감돼요)</b>' : ''}` : '');
 }
 function confirmBuy(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
   const price = num('bPrice'), qty = num('bQty'), date = val('bDate') || todayStr();
   if (!(price > 0) || !(qty > 0)) { alert('매수가와 수량을 입력해 주세요.'); return; }
-  const avgBefore = h.avg, n = h.qty + qty;
-  h.avg = (h.avg * h.qty + price * qty) / n; h.qty = n;
+  const { fee } = readCosts('b'), toCash = checked('buyCash'), avgBefore = h.avg, n = h.qty + qty;
+  h.avg = (h.avg * h.qty + price * qty + fee) / n; h.qty = n;     // 수수료는 취득원가(평균 매수가)에 포함
   if (!h.entryDate) h.entryDate = date;
   if (!(h.cur > 0)) h.cur = price;
-  addJournal({ type: 'buy', date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore, avgAfter: h.avg, holdingId: h.id,
+  const used = toCash ? Math.min(Number(state.cash[h.account]) || 0, price * qty + fee) : 0;   // 예수금이 모자라면 있는 만큼만
+  if (used > 0) addCash(h.account, -used);                          // 매수 대금 → 예수금 차감
+  addJournal({ type: 'buy', cashUsed: used, fee, date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore, avgAfter: h.avg, holdingId: h.id,
     reason: val('jReason').trim(), followed: parseFollowed(val('jFollow')), tags: readTags('jTags') });
   closeDlg(); persist(); render();
 }
 
-/* 매도 기록: 수량 감소 + 실현손익 자동 기록 + 일지 */
+/* 매도 기록: 수량 감소 + 실현손익(수수료·세금 반영) + 예수금 가산 + 일지 */
 function openSell(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
   if (h.stop0 > 0) { openExit(id); return; }                      // 트레이딩 포지션은 R 통계를 위해 청산 기록 창 사용
@@ -1417,8 +1477,9 @@ function openSell(id) {
     <label>매도일<input id="sDate" type="date" value="${todayStr()}"></label>
     <label>매도가${ACCT[h.account].cur === 'USD' ? ' ($)' : ' (원)'}<input id="sPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="sellPreview('${id}')"></label>
     <label>수량 (주, 일부만 팔면 그만큼만)<input id="sQty" type="number" step="any" inputmode="decimal" value="${h.qty}" oninput="sellPreview('${id}')"></label>
+    ${costRow('s', 'sell', `sellPreview('${id}')`)}
     <div class="plan-preview" id="sPreview" style="margin:0 0 10px"></div>
-    ${cashCheck('sellCash', `매도 대금을 ${ACCT[h.account].name} 예수금에 더하기`)}
+    ${cashCheck('sellCash', `매도 대금(수수료·세금 제외)을 ${ACCT[h.account].name} 예수금에 더하기`, `sellPreview('${id}')`)}
     <label>매매 사유<textarea id="jReason" rows="3" placeholder="왜 팔았나요? (목표가, 손절, 추세 이탈, 비중 조절 등)"></textarea></label>
     <label>원칙 준수 여부<select id="jFollow">${FOLLOW_OPTS(null)}</select></label>
     ${tagField('jTags', [])}
@@ -1429,19 +1490,22 @@ function openSell(id) {
 function sellPreview(id) {
   const h = state.holdings.find(x => x.id === id), p = num('sPrice'), q = num('sQty'), el = document.getElementById('sPreview');
   if (!h || !(p > 0) || !(q > 0)) { el.textContent = '매도가와 수량을 입력하면 실현손익을 계산해요.'; return; }
-  const pnl = (p - h.avg) * q, ret = h.avg ? (p / h.avg - 1) * 100 : 0, have = Number(state.cash[h.account]) || 0;
-  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)} (${fmtPct(ret)})</b>${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}<br>매도 대금 ${fmtCash(p * q, h.account)} → 예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(have + p * q, h.account)}</b>`;
+  autoCosts('s', h.account, 'sell', p * q);
+  const { fee, tax } = readCosts('s'), pnl = (p - h.avg) * q - fee - tax, ret = h.avg ? pnl / (h.avg * q) * 100 : 0, net = p * q - fee - tax, have = Number(state.cash[h.account]) || 0;
+  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)} (${fmtPct(ret)})</b>${fee + tax > 0 ? ` · 수수료·세금 ${fmtCash(fee + tax, h.account)} 반영` : ''}${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}` +
+    (checked('sellCash') ? `<br>입금액 ${fmtCash(net, h.account)} → 예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(have + net, h.account)}</b>` : '');
 }
 function confirmSell(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
   const price = num('sPrice'), qty = num('sQty'), date = val('sDate') || todayStr();
   if (!(price > 0) || !(qty > 0)) { alert('매도가와 수량을 입력해 주세요.'); return; }
   if (qty > h.qty + 1e-9) { alert('보유 수량보다 많이 팔 수 없어요.'); return; }
-  const cur = ACCT[h.account].cur, pnl = Math.round((price - h.avg) * qty * (cur === 'USD' ? 100 : 1)) / (cur === 'USD' ? 100 : 1);
-  const realizedId = uid(), toCash = document.getElementById('sellCash') && document.getElementById('sellCash').checked;
-  state.realized.push({ id: realizedId, account: h.account, date, name: `${h.name} 매도`, amount: pnl });
-  if (toCash) addCash(h.account, price * qty);                    // 매도 대금 → 예수금
-  addJournal({ type: 'sell', cashAdded: !!toCash, date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore: h.avg, pnl, ret: h.avg ? (price / h.avg - 1) * 100 : 0,
+  const { fee, tax } = readCosts('s'), usd = ACCT[h.account].cur === 'USD', k = usd ? 100 : 1;
+  const pnl = Math.round(((price - h.avg) * qty - fee - tax) * k) / k, net = price * qty - fee - tax, toCash = checked('sellCash');
+  const realizedId = uid();
+  state.realized.push({ id: realizedId, account: h.account, date, name: `${h.name} 매도`, amount: pnl });   // 수수료·세금 반영한 실현손익
+  if (toCash) addCash(h.account, net);                             // 매도 대금(비용 제외) → 예수금
+  addJournal({ type: 'sell', cashAdded: toCash, fee, tax, date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore: h.avg, pnl, ret: h.avg ? pnl / (h.avg * qty) * 100 : 0,
     holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId, reason: val('jReason').trim(), followed: parseFollowed(val('jFollow')),
     tags: readTags('jTags'), review: val('jReview').trim() });
   h.qty -= qty;
@@ -1564,7 +1628,9 @@ function renderJournalList() {
     const meta = e.type === 'note' ? '' : `${a.name} · ${fmtCash(e.price, e.account)} × ${e.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주` +
       (e.type === 'buy' && e.avgAfter ? ` · 평균 ${fmtCash(e.avgBefore, e.account)} → ${fmtCash(e.avgAfter, e.account)}` : '') +
       (e.type === 'sell' && e.pnl !== undefined ? `<br>실현 <b class="${cls(e.pnl)}">${sgn(e.pnl, e.account)}${typeof e.ret === 'number' ? ` (${fmtPct(e.ret)})` : ''}</b>${e.holdDays !== null && e.holdDays !== undefined ? ` · ${e.holdDays}일 보유` : ''}` : '') +
-      (e.type === 'sell' && e.cashAdded ? `<br>예수금 +${fmtCash(e.price * e.qty, e.account)} 반영` : '');
+      (e.fee > 0 || e.tax > 0 ? `<br>수수료 ${fmtCash(e.fee || 0, e.account)}${e.tax > 0 ? ` · 세금 ${fmtCash(e.tax, e.account)}` : ''}` : '') +
+      (e.type === 'sell' && e.cashAdded ? `<br>예수금 +${fmtCash(e.price * e.qty - (e.fee || 0) - (e.tax || 0), e.account)} 반영` : '') +
+      (e.type === 'buy' && e.cashUsed > 0 ? `<br>예수금 −${fmtCash(e.cashUsed, e.account)} 반영` : '');
     const follow = e.followed === true ? '<span class="pill good">원칙 준수</span>' : e.followed === false ? '<span class="pill warn">원칙 위반</span>' : '';
     return head + `<div class="jentry" style="--c:${a.color}"><div class="top"><div><span class="pill ${e.type}">${typeName}</span><span class="title">${esc(e.name || (e.type === 'note' ? '메모' : ''))}</span>${e.ticker ? `<span class="tag">${esc(e.ticker)}</span>` : ''}${follow}</div>
       <div><button class="icon-btn" onclick="openJournalForm('${e.id}')" title="수정">✎</button><button class="icon-btn" onclick="delJournal('${e.id}')" title="삭제">✕</button></div></div>
