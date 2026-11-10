@@ -208,6 +208,30 @@
     .pcards { grid-template-columns: 1fr; }
     .pc-levels { grid-template-columns: repeat(2, minmax(0,1fr)); }
   }
+  /* ---------- 매매 일지 ---------- */
+  .mini { padding: 4px 9px; font-size: 12px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+  .mini:hover { background: var(--surface-muted); }
+  .mini.buy { color: var(--up); } .mini.sell { color: var(--down); }
+  .j-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: .75rem; }
+  .j-head .card-label { margin: 0; }
+  .jfilters { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)) minmax(0,1.6fr); gap: 8px; margin-bottom: 1rem; }
+  .j-date { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 14px 0 6px; }
+  .jentry { border: 0.5px solid var(--border); border-left: 3px solid var(--c, var(--border)); border-radius: 10px; padding: .75rem .9rem; margin-bottom: 8px; background: var(--surface); }
+  .jentry .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .jentry .title { font-size: 14px; font-weight: 600; }
+  .jentry .meta { font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; font-variant-numeric: tabular-nums; line-height: 1.55; }
+  .jentry .reason { font-size: 13px; margin-top: 6px; white-space: pre-wrap; line-height: 1.55; }
+  .jentry .review { font-size: 13px; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--surface-muted); white-space: pre-wrap; }
+  .jentry .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .pill.good { background: rgba(27,175,122,.15); color: #1a8f66; }
+  .pill.buy { background: rgba(217,59,59,.12); color: var(--up); margin-left: 0; margin-right: 6px; }
+  .pill.sell { background: rgba(42,111,214,.14); color: var(--down); margin-left: 0; margin-right: 6px; }
+  .pill.note { margin-left: 0; margin-right: 6px; }
+  .chip.on { background: var(--text); color: var(--surface); }
+  .chip.pick { cursor: pointer; padding: 3px 10px; }
+  dialog textarea { width: 100%; padding: 8px 10px; border: 0.5px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text); font-family: inherit; resize: vertical; }
+  dialog { max-height: 90vh; overflow-y: auto; }
+  @media (max-width: 760px) { .jfilters { grid-template-columns: 1fr 1fr; } .jfilters input { grid-column: 1 / -1; } dialog textarea { font-size: 16px; } }
 </style>
 </head>
 <body>
@@ -247,7 +271,7 @@
     <button data-page="home" onclick="showPage('home')"><span class="ic">📊</span><span>요약</span></button>
     <button data-page="holdings" onclick="showPage('holdings')"><span class="ic">💼</span><span>보유 종목</span></button>
     <button data-page="trend" onclick="showPage('trend')"><span class="ic">📈</span><span>자산 추이</span></button>
-    <button data-page="money" onclick="showPage('money')"><span class="ic">💰</span><span>입출금</span></button>
+    <button data-page="rec" onclick="showPage('rec')"><span class="ic">📝</span><span>기록</span></button>
     <button data-page="trade" onclick="showPage('trade')"><span class="ic">🎯</span><span>트레이딩</span></button>
   </div>
 
@@ -388,7 +412,26 @@
     </div>
   </section>
 
-  <section class="page" data-page="money">
+  <section class="page" data-page="rec">
+  <div class="tabs" id="recTabs"></div>
+
+  <div id="recJournal">
+    <div id="jStats"></div>
+    <div class="card">
+      <div class="j-head"><div class="card-label">매매 일지</div><button class="btn" onclick="openJournalForm()">＋ 일지 직접 쓰기</button></div>
+      <div class="jfilters">
+        <select id="jfAcct" onchange="setJf('acct', this.value)" aria-label="계좌"></select>
+        <select id="jfType" onchange="setJf('type', this.value)" aria-label="구분"><option value="all">전체 구분</option><option value="buy">매수</option><option value="sell">매도</option><option value="note">메모</option></select>
+        <select id="jfTag" onchange="setJf('tag', this.value)" aria-label="태그"></select>
+        <input id="jfQ" placeholder="종목·사유·태그 검색" oninput="setJf('q', this.value)">
+      </div>
+      <div id="jList"></div>
+      <div class="note">보유 종목의 <b>매수/매도</b> 버튼과 트레이딩 탭의 진입·청산은 일지가 자동으로 남아요. 일지를 지워도 보유 수량과 실현손익은 그대로예요.</div>
+    </div>
+    <div class="card"><div class="card-label">태그별 성과</div><div class="table-scroll" id="jTagStats"></div></div>
+  </div>
+
+  <div id="recFlows" style="display:none">
   <div class="card">
     <div class="card-label">입출금 · 현금 잔고</div>
     <div class="form-grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) auto">
@@ -404,7 +447,9 @@
     <div class="cash-grid" id="cashGrid"></div>
     <div class="note">입금 기록이 있는 계좌는 <b>입출금 기준 손익 = 평가금액 + 현금 + 누적 출금 − 누적 입금</b>으로 계산해요. 그래서 수익금을 출금해도 성과가 줄지 않아요. 처음 넣은 원금도 "입금"으로 한 번 기록해 주세요. 입금 기록이 없는 계좌는 기존 방식(평가손익 + 누적 실현손익)을 그대로 써요.</div>
   </div>
+  </div>
 
+  <div id="recRealized" style="display:none">
   <div class="card">
     <div class="card-label">실현손익 기록 (매도 완료분)</div>
     <div class="form-grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr) auto">
@@ -415,6 +460,7 @@
       <button class="btn" onclick="addRealized()">추가</button>
     </div>
     <div class="table-scroll" id="realized" style="margin-top:1rem"></div>
+  </div>
   </div>
   </section>
 </div>
@@ -434,12 +480,12 @@ const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
 const DEFAULT_SECTORS = ['반도체','IT/소프트웨어','인터넷/플랫폼','2차전지','자동차','바이오/헬스케어','금융','에너지','소비재','통신','산업재','방산','부동산/리츠','ETF(지수)','ETF(섹터)','기타'];
-let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], trade: { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0 } };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], trade: { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0 } };
 function normalize() {
   state.holdings = state.holdings || []; state.realized = state.realized || [];
   state.snapshots = state.snapshots || []; state.flows = state.flows || []; state.daily = state.daily || [];
   state.cash = state.cash || {};
-  state.plans = state.plans || []; state.trades = state.trades || [];
+  state.plans = state.plans || []; state.trades = state.trades || []; state.journal = state.journal || [];
   state.trade = { riskPct: 1, minRR: 2, maxPosPct: 30, base: 0, ...(state.trade || {}) };
   if (!Array.isArray(state.sectors)) state.sectors = DEFAULT_SECTORS.slice();
 }
@@ -582,7 +628,7 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], trade: d.trade || {} };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], trade: d.trade || {} };
       normalize();
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
@@ -657,9 +703,10 @@ function delRealized(id) {
   state.realized = state.realized.filter(r => r.id !== id); persist(); render();
 }
 function setFilter(f) { filter = f; render(); }
-const PAGES = ['home', 'holdings', 'trend', 'money', 'trade'], LS_PAGE = 'stockDashboardPage';
+const PAGES = ['home', 'holdings', 'trend', 'rec', 'trade'], LS_PAGE = 'stockDashboardPage';
 function showPage(name, rerender = true) {
   if (name === 'monthly') { name = 'trend'; tMode = 'perf'; }      // 예전에 저장된 탭 이름
+  if (name === 'money') { name = 'rec'; recTab = 'flows'; }
   if (!PAGES.includes(name)) name = 'home';
   document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.dataset.page === name));
   document.querySelectorAll('#pageNav button').forEach(b => b.classList.toggle('active', b.dataset.page === name));
@@ -734,6 +781,7 @@ function render() {
   renderSectors();
   renderTrend();
   renderTrade();
+  renderRecords();
   renderHoldings();
   renderCashSection();
   renderFlows();
@@ -1057,6 +1105,8 @@ function confirmEntry(id) {
   state.holdings.push({ id: hid, account: 'mirae', name: p.name, ticker: p.ticker, sector: '', qty, avg, cur: p.cur > 0 ? p.cur : avg,
     stop: p.stop, stop0: p.stop, t1: p.t1, t2: p.t2 || 0, t1pct: p.t1pct || 50, setup: p.setup, planId: p.id, entryDate: date });
   p.status = 'entered'; p.holdingId = hid;
+  addJournal({ type: 'buy', source: 'plan', date, account: 'mirae', name: p.name, ticker: p.ticker || '', price: avg, qty, holdingId: hid,
+    reason: p.note || '', tags: [p.setup].filter(Boolean) });
   closeDlg(); trTab = 'pos'; persist(); render();
 }
 function updatePos(id, field, v) {
@@ -1074,6 +1124,7 @@ function openExit(id) {
     <label>청산일<input id="xDate" type="date" value="${todayStr()}"></label>
     <label>사유<select id="xReason"><option>목표가 도달</option><option>손절</option><option>추세 이탈(추적 손절)</option><option>기타</option></select></label>
     <label>메모<input id="xMemo" placeholder="복기용 메모 (선택)"></label>
+    <label>원칙 준수 여부<select id="xFollow">${FOLLOW_OPTS(null)}</select></label>
     <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn" onclick="confirmExit('${id}')">청산 기록</button></div>`);
 }
 function confirmExit(id) {
@@ -1087,6 +1138,10 @@ function confirmExit(id) {
     stop0: h.stop0 || 0, pnl, R: h.stop0 > 0 && risk0 > 0 ? (exit - h.avg) / risk0 : null,
     reason: document.getElementById('xReason').value, memo: document.getElementById('xMemo').value.trim(), realizedId });
   state.realized.push({ id: realizedId, account: 'mirae', date, name: `${h.name} 청산`, amount: pnl });
+  const xMemo = document.getElementById('xMemo').value.trim();
+  addJournal({ type: 'sell', source: 'trade', date, account: 'mirae', name: h.name, ticker: h.ticker || '', price: exit, qty, avgBefore: h.avg, pnl,
+    ret: h.avg ? (exit / h.avg - 1) * 100 : 0, holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId,
+    reason: document.getElementById('xReason').value + (xMemo ? ` — ${xMemo}` : ''), followed: parseFollowed(val('xFollow')), tags: [h.setup].filter(Boolean) });
   h.qty -= qty;
   if (h.qty <= 1e-9) state.holdings = state.holdings.filter(x => x.id !== id);
   closeDlg(); persist(); render();
@@ -1225,6 +1280,228 @@ function renderReview() {
       <td><button class="del" onclick="delTrade('${t.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>';
 }
 
+/* ---------- 매매 일지 ---------- */
+const DEFAULT_TAGS = ['눌림목', '돌파', '추세추종', '실적', '뉴스', '분할매수', '익절', '손절', '원칙위반', '충동매매'];
+const FOLLOW_OPTS = (v) => `<option value="" ${v === null || v === undefined ? 'selected' : ''}>선택 안 함</option><option value="1" ${v === true ? 'selected' : ''}>원칙대로 했어요</option><option value="0" ${v === false ? 'selected' : ''}>원칙을 어겼어요</option>`;
+const parseFollowed = v => v === '1' ? true : v === '0' ? false : null;
+let jf = { acct: 'all', type: 'all', tag: 'all', q: '' }, recTab = 'journal';
+const sgn = (v, acctId) => (v > 0 ? '+' : v < 0 ? '-' : '') + fmtCash(Math.abs(v), acctId);
+const val = id => (document.getElementById(id) || {}).value || '';
+
+function knownTags() { const s = new Set(DEFAULT_TAGS); state.journal.forEach(e => (e.tags || []).forEach(t => s.add(t))); return [...s]; }
+function tagField(id, init) {
+  const cur = init || [];
+  return `<label>태그 (쉼표로 구분, 아래에서 눌러 추가)<input id="${id}" value="${esc(cur.join(', '))}" placeholder="예: 눌림목, 실적"></label>
+    <div class="chips" style="margin:-4px 0 10px">${knownTags().map(t => `<span class="chip pick ${cur.includes(t) ? 'on' : ''}" data-tag="${esc(t)}" onclick="toggleTag('${id}', this)">${esc(t)}</span>`).join('')}</div>`;
+}
+function readTags(id) { return [...new Set(val(id).split(/[,，]/).map(t => t.trim()).filter(Boolean))]; }
+function toggleTag(id, el) {
+  const t = el.dataset.tag, cur = readTags(id), i = cur.indexOf(t);
+  if (i >= 0) cur.splice(i, 1); else cur.push(t);
+  document.getElementById(id).value = cur.join(', '); el.classList.toggle('on', i < 0);
+}
+function holdDays(entryDate, date) {
+  if (!entryDate) return null;
+  const d = (new Date(date) - new Date(entryDate)) / 86400000;
+  return d >= 0 ? Math.round(d) : null;
+}
+function addJournal(e) { state.journal.push({ id: uid(), source: 'holding', followed: null, tags: [], reason: '', review: '', ...e }); }
+
+/* 매수 기록: 수량 증가 + 평균 매수가 재계산 + 일지 */
+function openBuy(id) {
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  openDlg(`<h3>매수 기록 — ${esc(h.name)}</h3>
+    <div class="note" style="margin:0 0 .75rem">${ACCT[h.account].name} · 현재 ${h.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주, 평균 ${fmtCash(h.avg, h.account)}</div>
+    <label>매수일<input id="bDate" type="date" value="${todayStr()}"></label>
+    <label>매수가${ACCT[h.account].cur === 'USD' ? ' ($)' : ' (원)'}<input id="bPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="buyPreview('${id}')"></label>
+    <label>수량 (주)<input id="bQty" type="number" step="any" inputmode="decimal" oninput="buyPreview('${id}')"></label>
+    <div class="plan-preview" id="bPreview" style="margin:0 0 10px">매수가와 수량을 입력하면 새 평균 매수가를 계산해요.</div>
+    <label>매매 사유<textarea id="jReason" rows="3" placeholder="왜 샀나요? (근거, 차트 자리, 뉴스 등)"></textarea></label>
+    <label>원칙 준수 여부<select id="jFollow">${FOLLOW_OPTS(null)}</select></label>
+    ${tagField('jTags', [])}
+    <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn" onclick="confirmBuy('${id}')">매수 기록</button></div>`);
+}
+function buyPreview(id) {
+  const h = state.holdings.find(x => x.id === id), p = num('bPrice'), q = num('bQty'), el = document.getElementById('bPreview');
+  if (!h || !(p > 0) || !(q > 0)) { el.textContent = '매수가와 수량을 입력하면 새 평균 매수가를 계산해요.'; return; }
+  const n = h.qty + q, a = (h.avg * h.qty + p * q) / n;
+  el.innerHTML = `매수 후 <b>${n.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주</b> · 새 평균 매수가 <b>${fmtCash(a, h.account)}</b> (이번 매수 금액 ${fmtCash(p * q, h.account)})`;
+}
+function confirmBuy(id) {
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  const price = num('bPrice'), qty = num('bQty'), date = val('bDate') || todayStr();
+  if (!(price > 0) || !(qty > 0)) { alert('매수가와 수량을 입력해 주세요.'); return; }
+  const avgBefore = h.avg, n = h.qty + qty;
+  h.avg = (h.avg * h.qty + price * qty) / n; h.qty = n;
+  if (!h.entryDate) h.entryDate = date;
+  if (!(h.cur > 0)) h.cur = price;
+  addJournal({ type: 'buy', date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore, avgAfter: h.avg, holdingId: h.id,
+    reason: val('jReason').trim(), followed: parseFollowed(val('jFollow')), tags: readTags('jTags') });
+  closeDlg(); persist(); render();
+}
+
+/* 매도 기록: 수량 감소 + 실현손익 자동 기록 + 일지 */
+function openSell(id) {
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  if (h.stop0 > 0) { openExit(id); return; }                      // 트레이딩 포지션은 R 통계를 위해 청산 기록 창 사용
+  openDlg(`<h3>매도 기록 — ${esc(h.name)}</h3>
+    <div class="note" style="margin:0 0 .75rem">${ACCT[h.account].name} · 보유 ${h.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주, 평균 ${fmtCash(h.avg, h.account)}</div>
+    <label>매도일<input id="sDate" type="date" value="${todayStr()}"></label>
+    <label>매도가${ACCT[h.account].cur === 'USD' ? ' ($)' : ' (원)'}<input id="sPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="sellPreview('${id}')"></label>
+    <label>수량 (주, 일부만 팔면 그만큼만)<input id="sQty" type="number" step="any" inputmode="decimal" value="${h.qty}" oninput="sellPreview('${id}')"></label>
+    <div class="plan-preview" id="sPreview" style="margin:0 0 10px"></div>
+    <label>매매 사유<textarea id="jReason" rows="3" placeholder="왜 팔았나요? (목표가, 손절, 추세 이탈, 비중 조절 등)"></textarea></label>
+    <label>원칙 준수 여부<select id="jFollow">${FOLLOW_OPTS(null)}</select></label>
+    ${tagField('jTags', [])}
+    <label>복기 한 줄<input id="jReview" placeholder="다음에 같은 상황이면?"></label>
+    <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn" onclick="confirmSell('${id}')">매도 기록</button></div>`);
+  sellPreview(id);
+}
+function sellPreview(id) {
+  const h = state.holdings.find(x => x.id === id), p = num('sPrice'), q = num('sQty'), el = document.getElementById('sPreview');
+  if (!h || !(p > 0) || !(q > 0)) { el.textContent = '매도가와 수량을 입력하면 실현손익을 계산해요.'; return; }
+  const pnl = (p - h.avg) * q, ret = h.avg ? (p / h.avg - 1) * 100 : 0;
+  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)} (${fmtPct(ret)})</b>${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}`;
+}
+function confirmSell(id) {
+  const h = state.holdings.find(x => x.id === id); if (!h) return;
+  const price = num('sPrice'), qty = num('sQty'), date = val('sDate') || todayStr();
+  if (!(price > 0) || !(qty > 0)) { alert('매도가와 수량을 입력해 주세요.'); return; }
+  if (qty > h.qty + 1e-9) { alert('보유 수량보다 많이 팔 수 없어요.'); return; }
+  const cur = ACCT[h.account].cur, pnl = Math.round((price - h.avg) * qty * (cur === 'USD' ? 100 : 1)) / (cur === 'USD' ? 100 : 1);
+  const realizedId = uid();
+  state.realized.push({ id: realizedId, account: h.account, date, name: `${h.name} 매도`, amount: pnl });
+  addJournal({ type: 'sell', date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore: h.avg, pnl, ret: h.avg ? (price / h.avg - 1) * 100 : 0,
+    holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId, reason: val('jReason').trim(), followed: parseFollowed(val('jFollow')),
+    tags: readTags('jTags'), review: val('jReview').trim() });
+  h.qty -= qty;
+  if (h.qty <= 1e-9) state.holdings = state.holdings.filter(x => x.id !== id);
+  closeDlg(); persist(); render();
+}
+
+/* 일지 직접 쓰기(과거 매매·시장 메모) / 수정 */
+function openJournalForm(id) {
+  const e = id ? state.journal.find(x => x.id === id) : null;
+  const limited = e && e.source !== 'free';                       // 보유 종목·트레이딩에서 자동으로 만든 일지는 글 위주로만 수정
+  const t = e ? e.type : 'buy';
+  openDlg(`<h3>${e ? '일지 수정' : '일지 직접 쓰기'}</h3>
+    ${e ? '' : '<div class="note" style="margin:0 0 .75rem">이미 끝난 과거 매매나 시장 메모를 남길 때 써요. 보유 수량과 실현손익은 바뀌지 않아요. (지금 하는 매매는 보유 종목의 매수/매도 버튼을 쓰세요.)</div>'}
+    <input type="hidden" id="jId" value="${e ? e.id : ''}">
+    ${limited ? `<div class="note" style="margin:0 0 .75rem">${esc(e.name)} · ${e.type === 'buy' ? '매수' : '매도'} ${fmtCash(e.price, e.account)} × ${e.qty}주</div>` : `
+    <label>구분<select id="jType" onchange="jTypeChange()"><option value="buy" ${t === 'buy' ? 'selected' : ''}>매수</option><option value="sell" ${t === 'sell' ? 'selected' : ''}>매도</option><option value="note" ${t === 'note' ? 'selected' : ''}>메모</option></select></label>
+    <label>계좌<select id="jAcct">${ACCOUNTS.map(a => `<option value="${a.id}" ${e && e.account === a.id ? 'selected' : ''}>${a.name}</option>`).join('')}</select></label>
+    <label id="jNameL">종목명 (메모는 제목)<input id="jName" value="${esc(e ? e.name : '')}"></label>
+    <div class="jt">
+      <label>티커 (선택)<input id="jTicker" value="${esc(e ? e.ticker : '')}"></label>
+      <label>가격 (신한은 USD)<input id="jPrice" type="number" step="any" inputmode="decimal" value="${e && e.price ? e.price : ''}"></label>
+      <label>수량<input id="jQty" type="number" step="any" inputmode="decimal" value="${e && e.qty ? e.qty : ''}"></label>
+    </div>
+    <div class="js">
+      <label>평균 매수가 (선택, 입력하면 손익 계산)<input id="jAvg" type="number" step="any" inputmode="decimal" value="${e && e.avgBefore ? e.avgBefore : ''}"></label>
+      <label>매수일 (선택, 보유 기간 계산)<input id="jEntryDate" type="date" value="${e && e.entryDate ? e.entryDate : ''}"></label>
+    </div>`}
+    <label>날짜<input id="jDate" type="date" value="${e ? e.date : todayStr()}"></label>
+    <label>${t === 'note' && !limited ? '내용' : '매매 사유'}<textarea id="jReason" rows="3">${esc(e ? e.reason : '')}</textarea></label>
+    <div class="jt2"><label>원칙 준수 여부<select id="jFollow">${FOLLOW_OPTS(e ? e.followed : null)}</select></label></div>
+    ${tagField('jTags', e ? e.tags : [])}
+    <div class="js2"><label>복기 한 줄<input id="jReview" value="${esc(e ? e.review : '')}"></label></div>
+    <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn" onclick="saveJournalForm()">${e ? '수정 저장' : '일지 저장'}</button></div>`);
+  if (!limited) jTypeChange();
+}
+function jTypeChange() {
+  const t = val('jType'), show = (cls, on) => document.querySelectorAll('#dlg ' + cls).forEach(el => el.style.display = on ? '' : 'none');
+  show('.jt', t !== 'note'); show('.js', t === 'sell'); show('.jt2', t !== 'note'); show('.js2', t === 'sell');
+}
+function saveJournalForm() {
+  const id = val('jId'), e = id ? state.journal.find(x => x.id === id) : null;
+  const limited = e && e.source !== 'free';
+  const date = val('jDate') || todayStr();
+  const common = { date, reason: val('jReason').trim(), followed: parseFollowed(val('jFollow')), tags: readTags('jTags'), review: val('jReview').trim() };
+  if (limited) { Object.assign(e, common); closeDlg(); persist(); render(); return; }
+  const type = val('jType'), name = val('jName').trim();
+  if (!name && type !== 'note') { alert('종목명을 입력해 주세요.'); return; }
+  if (type === 'note' && !common.reason && !name) { alert('내용이나 제목을 입력해 주세요.'); return; }
+  const account = val('jAcct'), price = num('jPrice'), qty = num('jQty');
+  const rec = { ...common, type, account, name, source: 'free', ticker: '', price: 0, qty: 0 };
+  if (type !== 'note') {
+    if (!(price > 0) || !(qty > 0)) { alert('가격과 수량을 입력해 주세요.'); return; }
+    Object.assign(rec, { ticker: val('jTicker').trim(), price, qty });
+    if (type === 'sell') {
+      const avg = num('jAvg'), ed = val('jEntryDate');
+      if (avg > 0) Object.assign(rec, { avgBefore: avg, pnl: Math.round((price - avg) * qty * 100) / 100, ret: (price / avg - 1) * 100 });
+      if (ed) Object.assign(rec, { entryDate: ed, holdDays: holdDays(ed, date) });
+    } else rec.review = '';
+  } else { rec.review = ''; rec.followed = null; }
+  if (e) { ['avgBefore', 'pnl', 'ret', 'entryDate', 'holdDays'].forEach(k => delete e[k]); Object.assign(e, rec); }
+  else state.journal.push({ id: uid(), ...rec });
+  closeDlg(); persist(); render();
+}
+function delJournal(id) {
+  if (!confirm('이 일지를 삭제할까요?\n(보유 수량과 실현손익 기록은 그대로 두고 일지만 지워요)')) return;
+  state.journal = state.journal.filter(x => x.id !== id); persist(); render();
+}
+
+/* 기록 탭 렌더링 */
+function setRecTab(t) { recTab = t; renderRecords(); }
+function setJf(k, v) { jf[k] = v; renderJournalList(); }
+function renderRecords() {
+  document.getElementById('recTabs').innerHTML = [['journal', '📝 매매 일지'], ['flows', '💰 입출금'], ['realized', '📈 실현손익']]
+    .map(([id, name]) => `<button class="tab ${recTab === id ? 'active' : ''}" onclick="setRecTab('${id}')">${name}</button>`).join('');
+  ['Journal', 'Flows', 'Realized'].forEach(n => document.getElementById('rec' + n).style.display = recTab === n.toLowerCase() ? '' : 'none');
+  if (recTab === 'journal') {
+    const sel = document.getElementById('jfAcct'); if (!sel.options.length) sel.innerHTML = '<option value="all">전체 계좌</option>' + ACCOUNTS.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+    const tag = document.getElementById('jfTag');
+    if (document.activeElement !== tag) { tag.innerHTML = '<option value="all">전체 태그</option>' + knownTags().filter(t => state.journal.some(e => (e.tags || []).includes(t))).map(t => `<option value="${esc(t)}" ${jf.tag === t ? 'selected' : ''}>${esc(t)}</option>`).join(''); }
+    if (jf.tag !== 'all' && ![...tag.options].some(o => o.value === jf.tag)) jf.tag = 'all';
+    renderJournalStats(); renderJournalList();
+  }
+}
+function journalStats(list) {
+  const sells = list.filter(e => e.type === 'sell' && e.pnl !== undefined), tr = list.filter(e => e.type !== 'note');
+  const wins = sells.filter(e => e.pnl > 0).length, judged = list.filter(e => e.followed === true || e.followed === false);
+  const rets = sells.filter(e => typeof e.ret === 'number').map(e => e.ret);
+  return { trades: tr.length, buys: list.filter(e => e.type === 'buy').length, sellsN: list.filter(e => e.type === 'sell').length,
+    winRate: sells.length ? wins / sells.length * 100 : null, follow: judged.length ? judged.filter(e => e.followed).length / judged.length * 100 : null, judged: judged.length,
+    avgRet: rets.length ? rets.reduce((s, x) => s + x, 0) / rets.length : null, sellsWithPnl: sells.length };
+}
+function renderJournalStats() {
+  const month = todayStr().slice(0, 7), all = journalStats(state.journal), m = journalStats(state.journal.filter(e => e.date.startsWith(month)));
+  const st = (label, v, sub, c) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value ${c || ''}">${v}</div>${sub ? `<div class="stat-sub" style="color:var(--text-muted)">${sub}</div>` : ''}</div>`;
+  document.getElementById('jStats').innerHTML = `<div class="summary" style="margin-bottom:1rem">` +
+    st('이번 달 매매', m.trades + '건', `매수 ${m.buys} · 매도 ${m.sellsN}`) +
+    st('원칙 준수율', all.follow === null ? '-' : all.follow.toFixed(0) + '%', all.judged ? `판정한 ${all.judged}건 기준` : '일지에 원칙 준수 여부를 표시해 보세요') +
+    st('매도 승률', all.winRate === null ? '-' : all.winRate.toFixed(0) + '%', all.sellsWithPnl ? `손익이 계산된 ${all.sellsWithPnl}건` : '') +
+    st('평균 매도 수익률', all.avgRet === null ? '-' : fmtPct(all.avgRet), '', all.avgRet === null ? '' : cls(all.avgRet)) + `</div>`;
+  const tags = {}; state.journal.forEach(e => (e.tags || []).forEach(t => (tags[t] = tags[t] || []).push(e)));
+  const rows = Object.entries(tags).map(([t, arr]) => ({ t, n: arr.length, s: journalStats(arr) })).sort((a, b) => b.n - a.n);
+  document.getElementById('jTagStats').innerHTML = rows.length
+    ? `<table><thead><tr><th>태그</th><th>건수</th><th>매도 승률</th><th>평균 수익률</th></tr></thead><tbody>` +
+      rows.map(({ t, n, s }) => `<tr><td>${esc(t)}</td><td>${n}건</td><td>${s.winRate === null ? '-' : s.winRate.toFixed(0) + '%'}</td><td class="${s.avgRet === null ? '' : cls(s.avgRet)}">${s.avgRet === null ? '-' : fmtPct(s.avgRet)}</td></tr>`).join('') + '</tbody></table>'
+    : '<div class="empty">태그를 붙여 쓰면 셋업·이유별 성과가 여기에 쌓여요.</div>';
+}
+function renderJournalList() {
+  const q = jf.q.trim().toLowerCase();
+  const list = state.journal.filter(e => (jf.acct === 'all' || e.account === jf.acct) && (jf.type === 'all' || e.type === jf.type) && (jf.tag === 'all' || (e.tags || []).includes(jf.tag)) &&
+    (!q || [e.name, e.ticker, e.reason, e.review, (e.tags || []).join(' ')].join(' ').toLowerCase().includes(q)))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const el = document.getElementById('jList');
+  if (!state.journal.length) { el.innerHTML = '<div class="empty">아직 일지가 없어요.<br>보유 종목의 <b>매수/매도</b> 버튼으로 매매를 기록하면 자동으로 쌓이고,<br>＋ 일지 직접 쓰기로 과거 매매나 메모도 남길 수 있어요.</div>'; return; }
+  if (!list.length) { el.innerHTML = '<div class="empty">조건에 맞는 일지가 없어요.</div>'; return; }
+  let last = '';
+  el.innerHTML = list.slice(0, 200).map(e => {
+    const a = ACCT[e.account] || { name: '', color: '#999', cur: 'KRW' }, head = e.date !== last ? `<div class="j-date">${esc(e.date)}</div>` : ''; last = e.date;
+    const typeName = { buy: '매수', sell: '매도', note: '메모' }[e.type];
+    const meta = e.type === 'note' ? '' : `${a.name} · ${fmtCash(e.price, e.account)} × ${e.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주` +
+      (e.type === 'buy' && e.avgAfter ? ` · 평균 ${fmtCash(e.avgBefore, e.account)} → ${fmtCash(e.avgAfter, e.account)}` : '') +
+      (e.type === 'sell' && e.pnl !== undefined ? `<br>실현 <b class="${cls(e.pnl)}">${sgn(e.pnl, e.account)}${typeof e.ret === 'number' ? ` (${fmtPct(e.ret)})` : ''}</b>${e.holdDays !== null && e.holdDays !== undefined ? ` · ${e.holdDays}일 보유` : ''}` : '');
+    const follow = e.followed === true ? '<span class="pill good">원칙 준수</span>' : e.followed === false ? '<span class="pill warn">원칙 위반</span>' : '';
+    return head + `<div class="jentry" style="--c:${a.color}"><div class="top"><div><span class="pill ${e.type}">${typeName}</span><span class="title">${esc(e.name || (e.type === 'note' ? '메모' : ''))}</span>${e.ticker ? `<span class="tag">${esc(e.ticker)}</span>` : ''}${follow}</div>
+      <div><button class="icon-btn" onclick="openJournalForm('${e.id}')" title="수정">✎</button><button class="icon-btn" onclick="delJournal('${e.id}')" title="삭제">✕</button></div></div>
+      ${meta ? `<div class="meta">${meta}</div>` : ''}${e.reason ? `<div class="reason">${esc(e.reason)}</div>` : ''}${e.review ? `<div class="review">💭 ${esc(e.review)}</div>` : ''}
+      ${(e.tags || []).length ? `<div class="tags">${e.tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}</div>`;
+  }).join('') + (list.length > 200 ? `<div class="note">최근 200건만 보여 줘요. 필터로 좁혀 보세요.</div>` : '');
+}
+
 function setMFilter(f) { mFilter = f; renderMonthly(); }
 
 function monthlyRows() {
@@ -1324,7 +1601,7 @@ function renderHoldings() {
       <td>${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</td>
       <td class="${cls(pnl)}">${(pnl > 0 ? '+' : '') + fmtNum(pnl, a.cur)}</td>
       <td class="${cls(ret)}">${fmtPct(ret)}</td>
-      <td><button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>' +
+      <td style="white-space:nowrap"><button class="mini buy" onclick="openBuy('${h.id}')">매수</button> <button class="mini sell" onclick="openSell('${h.id}')">매도</button> <button class="del" onclick="delHolding('${h.id}')" title="삭제">✕</button></td></tr>`).join('') + '</tbody></table>' +
     '<div class="hcards">' + items.map(({ h, a, val, pnl, ret, valKRW }) => `<div class="hcard">
       <div class="hc-top"><div><span class="dot" style="--c:${a.color}"></span><b>${esc(h.name)}</b><span class="tag edit" onclick="editTicker('${h.id}')">${h.ticker ? esc(h.ticker) : '+ 티커'}</span>
         <div class="hc-sub">${a.name} · 전체의 ${assets ? (valKRW / assets * 100).toFixed(1) : '0.0'}%</div>${posNote(h)}</div>
@@ -1336,7 +1613,8 @@ function renderHoldings() {
         <label>평균 매수가${a.cur === 'USD' ? ' ($)' : ''}<input type="number" step="any" min="0" inputmode="decimal" value="${h.avg}" onchange="updateAvg('${h.id}', this.value)"></label>
         <label>섹터<input list="sectorList" value="${esc(h.sector || '')}" placeholder="미분류" onchange="updateSector('${h.id}', this.value)"></label>
         <label>현재가<input type="number" step="any" inputmode="decimal" value="${h.cur}" onchange="updateCur('${h.id}', this.value)"></label>
-      </div></div>`).join('') + '</div>';
+      </div>
+      <div class="pc-actions"><button class="mini buy" onclick="openBuy('${h.id}')">매수 기록</button><button class="mini sell" onclick="openSell('${h.id}')">매도 기록</button></div></div>`).join('') + '</div>';
 }
 
 /* ---------- 섹터 목록 관리 ---------- */
