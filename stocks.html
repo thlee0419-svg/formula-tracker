@@ -1174,13 +1174,22 @@ function updatePos(id, field, v) {
 function openExit(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
   openDlg(`<h3>청산 기록 — ${esc(h.name)}</h3>
-    <label>청산가 (원)<input id="xPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}"></label>
-    <label>청산 수량 (보유 ${h.qty.toLocaleString('ko-KR')}주, 분할 청산은 일부만)<input id="xQty" type="number" step="any" inputmode="decimal" value="${h.qty}"></label>
+    <label>청산가 (원)<input id="xPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="exitPreview('${id}')"></label>
+    <label>청산 수량 (보유 ${h.qty.toLocaleString('ko-KR')}주, 분할 청산은 일부만)<input id="xQty" type="number" step="any" inputmode="decimal" value="${h.qty}" oninput="exitPreview('${id}')"></label>
+    <div class="plan-preview" id="xPreview" style="margin:0 0 10px"></div>
+    ${cashCheck('exitCash', `청산 대금을 ${ACCT[h.account].name} 예수금에 더하기`)}
     <label>청산일<input id="xDate" type="date" value="${todayStr()}"></label>
     <label>사유<select id="xReason"><option>목표가 도달</option><option>손절</option><option>추세 이탈(추적 손절)</option><option>기타</option></select></label>
     <label>메모<input id="xMemo" placeholder="복기용 메모 (선택)"></label>
     <label>원칙 준수 여부<select id="xFollow">${FOLLOW_OPTS(null)}</select></label>
     <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">취소</button><button class="btn" onclick="confirmExit('${id}')">청산 기록</button></div>`);
+  exitPreview(id);
+}
+function exitPreview(id) {
+  const h = state.holdings.find(x => x.id === id), p = num('xPrice'), q = num('xQty'), el = document.getElementById('xPreview');
+  if (!h || !(p > 0) || !(q > 0)) { el.textContent = '청산가와 수량을 입력하면 실현손익과 예수금 변화를 계산해요.'; return; }
+  const pnl = (p - h.avg) * q, have = Number(state.cash[h.account]) || 0;
+  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)}</b>${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}<br>청산 대금 ${fmtCash(p * q, h.account)} → 예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(have + p * q, h.account)}</b>`;
 }
 function confirmExit(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
@@ -1193,8 +1202,10 @@ function confirmExit(id) {
     stop0: h.stop0 || 0, pnl, R: h.stop0 > 0 && risk0 > 0 ? (exit - h.avg) / risk0 : null,
     reason: document.getElementById('xReason').value, memo: document.getElementById('xMemo').value.trim(), realizedId });
   state.realized.push({ id: realizedId, account: 'mirae', date, name: `${h.name} 청산`, amount: pnl });
+  const toCash = document.getElementById('exitCash') && document.getElementById('exitCash').checked;
+  if (toCash) addCash('mirae', exit * qty);                       // 청산 대금 → 예수금
   const xMemo = document.getElementById('xMemo').value.trim();
-  addJournal({ type: 'sell', source: 'trade', date, account: 'mirae', name: h.name, ticker: h.ticker || '', price: exit, qty, avgBefore: h.avg, pnl,
+  addJournal({ type: 'sell', source: 'trade', cashAdded: !!toCash, date, account: 'mirae', name: h.name, ticker: h.ticker || '', price: exit, qty, avgBefore: h.avg, pnl,
     ret: h.avg ? (exit / h.avg - 1) * 100 : 0, holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId,
     reason: document.getElementById('xReason').value + (xMemo ? ` — ${xMemo}` : ''), followed: parseFollowed(val('xFollow')), tags: [h.setup].filter(Boolean) });
   h.qty -= qty;
@@ -1360,6 +1371,8 @@ function holdDays(entryDate, date) {
   const d = (new Date(date) - new Date(entryDate)) / 86400000;
   return d >= 0 ? Math.round(d) : null;
 }
+function addCash(acctId, amount) { state.cash[acctId] = Math.round(((Number(state.cash[acctId]) || 0) + amount) * 100) / 100; }
+const cashCheck = (id, text) => `<label style="flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:13px"><input type="checkbox" id="${id}" checked style="width:auto;min-height:0">${text}</label>`;
 function addJournal(e) { state.journal.push({ id: uid(), source: 'holding', followed: null, tags: [], reason: '', review: '', ...e }); }
 
 /* 매수 기록: 수량 증가 + 평균 매수가 재계산 + 일지 */
@@ -1405,6 +1418,7 @@ function openSell(id) {
     <label>매도가${ACCT[h.account].cur === 'USD' ? ' ($)' : ' (원)'}<input id="sPrice" type="number" step="any" inputmode="decimal" value="${h.cur > 0 ? h.cur : ''}" oninput="sellPreview('${id}')"></label>
     <label>수량 (주, 일부만 팔면 그만큼만)<input id="sQty" type="number" step="any" inputmode="decimal" value="${h.qty}" oninput="sellPreview('${id}')"></label>
     <div class="plan-preview" id="sPreview" style="margin:0 0 10px"></div>
+    ${cashCheck('sellCash', `매도 대금을 ${ACCT[h.account].name} 예수금에 더하기`)}
     <label>매매 사유<textarea id="jReason" rows="3" placeholder="왜 팔았나요? (목표가, 손절, 추세 이탈, 비중 조절 등)"></textarea></label>
     <label>원칙 준수 여부<select id="jFollow">${FOLLOW_OPTS(null)}</select></label>
     ${tagField('jTags', [])}
@@ -1415,8 +1429,8 @@ function openSell(id) {
 function sellPreview(id) {
   const h = state.holdings.find(x => x.id === id), p = num('sPrice'), q = num('sQty'), el = document.getElementById('sPreview');
   if (!h || !(p > 0) || !(q > 0)) { el.textContent = '매도가와 수량을 입력하면 실현손익을 계산해요.'; return; }
-  const pnl = (p - h.avg) * q, ret = h.avg ? (p / h.avg - 1) * 100 : 0;
-  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)} (${fmtPct(ret)})</b>${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}`;
+  const pnl = (p - h.avg) * q, ret = h.avg ? (p / h.avg - 1) * 100 : 0, have = Number(state.cash[h.account]) || 0;
+  el.innerHTML = `실현손익 <b class="${pnl >= 0 ? 'ok' : 'bad'}">${sgn(pnl, h.account)} (${fmtPct(ret)})</b>${q > h.qty + 1e-9 ? ' · <b class="bad">보유 수량보다 많아요</b>' : ''}<br>매도 대금 ${fmtCash(p * q, h.account)} → 예수금 ${fmtCash(have, h.account)} → <b>${fmtCash(have + p * q, h.account)}</b>`;
 }
 function confirmSell(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
@@ -1424,9 +1438,10 @@ function confirmSell(id) {
   if (!(price > 0) || !(qty > 0)) { alert('매도가와 수량을 입력해 주세요.'); return; }
   if (qty > h.qty + 1e-9) { alert('보유 수량보다 많이 팔 수 없어요.'); return; }
   const cur = ACCT[h.account].cur, pnl = Math.round((price - h.avg) * qty * (cur === 'USD' ? 100 : 1)) / (cur === 'USD' ? 100 : 1);
-  const realizedId = uid();
+  const realizedId = uid(), toCash = document.getElementById('sellCash') && document.getElementById('sellCash').checked;
   state.realized.push({ id: realizedId, account: h.account, date, name: `${h.name} 매도`, amount: pnl });
-  addJournal({ type: 'sell', date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore: h.avg, pnl, ret: h.avg ? (price / h.avg - 1) * 100 : 0,
+  if (toCash) addCash(h.account, price * qty);                    // 매도 대금 → 예수금
+  addJournal({ type: 'sell', cashAdded: !!toCash, date, account: h.account, name: h.name, ticker: h.ticker || '', price, qty, avgBefore: h.avg, pnl, ret: h.avg ? (price / h.avg - 1) * 100 : 0,
     holdDays: holdDays(h.entryDate, date), holdingId: h.id, realizedId, reason: val('jReason').trim(), followed: parseFollowed(val('jFollow')),
     tags: readTags('jTags'), review: val('jReview').trim() });
   h.qty -= qty;
@@ -1548,7 +1563,8 @@ function renderJournalList() {
     const typeName = { buy: '매수', sell: '매도', note: '메모' }[e.type];
     const meta = e.type === 'note' ? '' : `${a.name} · ${fmtCash(e.price, e.account)} × ${e.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주` +
       (e.type === 'buy' && e.avgAfter ? ` · 평균 ${fmtCash(e.avgBefore, e.account)} → ${fmtCash(e.avgAfter, e.account)}` : '') +
-      (e.type === 'sell' && e.pnl !== undefined ? `<br>실현 <b class="${cls(e.pnl)}">${sgn(e.pnl, e.account)}${typeof e.ret === 'number' ? ` (${fmtPct(e.ret)})` : ''}</b>${e.holdDays !== null && e.holdDays !== undefined ? ` · ${e.holdDays}일 보유` : ''}` : '');
+      (e.type === 'sell' && e.pnl !== undefined ? `<br>실현 <b class="${cls(e.pnl)}">${sgn(e.pnl, e.account)}${typeof e.ret === 'number' ? ` (${fmtPct(e.ret)})` : ''}</b>${e.holdDays !== null && e.holdDays !== undefined ? ` · ${e.holdDays}일 보유` : ''}` : '') +
+      (e.type === 'sell' && e.cashAdded ? `<br>예수금 +${fmtCash(e.price * e.qty, e.account)} 반영` : '');
     const follow = e.followed === true ? '<span class="pill good">원칙 준수</span>' : e.followed === false ? '<span class="pill warn">원칙 위반</span>' : '';
     return head + `<div class="jentry" style="--c:${a.color}"><div class="top"><div><span class="pill ${e.type}">${typeName}</span><span class="title">${esc(e.name || (e.type === 'note' ? '메모' : ''))}</span>${e.ticker ? `<span class="tag">${esc(e.ticker)}</span>` : ''}${follow}</div>
       <div><button class="icon-btn" onclick="openJournalForm('${e.id}')" title="수정">✎</button><button class="icon-btn" onclick="delJournal('${e.id}')" title="삭제">✕</button></div></div>
