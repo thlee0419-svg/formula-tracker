@@ -210,6 +210,9 @@
   }
   /* ---------- 매매 일지 ---------- */
   .plan-acct { width: auto; min-height: 0; padding: 6px 8px; font-size: 13px; }
+  .wbar { position: relative; height: 6px; border-radius: 3px; background: var(--surface-muted); margin: 8px 0 4px; }
+  .wbar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .wbar b { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--text); border-radius: 1px; }
   .dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .mini { padding: 4px 9px; font-size: 12px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; cursor: pointer; white-space: nowrap; }
   .mini:hover { background: var(--surface-muted); }
@@ -274,7 +277,8 @@
     <button data-page="holdings" onclick="showPage('holdings')"><span class="ic">💼</span><span>보유 종목</span></button>
     <button data-page="trend" onclick="showPage('trend')"><span class="ic">📈</span><span>자산 추이</span></button>
     <button data-page="rec" onclick="showPage('rec')"><span class="ic">📝</span><span>기록</span></button>
-    <button data-page="trade" onclick="showPage('trade')"><span class="ic">🎯</span><span>관심·매수</span></button>
+    <button data-page="trade" onclick="showPage('trade')"><span class="ic">🎯</span><span>트레이딩</span></button>
+    <button data-page="invest" onclick="showPage('invest')"><span class="ic">🌱</span><span>투자</span></button>
   </div>
 
   <section class="page" data-page="home">
@@ -377,50 +381,27 @@
 
     <div id="trPlans">
       <div class="card">
-        <div class="card-label">리스크·비중 규칙</div>
+        <div class="card-label">트레이딩 리스크 규칙 (미래에셋)</div>
         <div class="rule-grid">
           <div class="field"><label>1회 최대 손실 (%)</label><input id="rRisk" type="number" step="0.1" min="0" inputmode="decimal" onchange="setRule('riskPct', this.value)"></div>
           <div class="field"><label>최소 손익비 (X : 1)</label><input id="rRR" type="number" step="0.1" min="0" inputmode="decimal" onchange="setRule('minRR', this.value)"></div>
-          <div class="field"><label>종목당 최대 비중 (%) · 위험 기준</label><input id="rMaxPos" type="number" step="1" min="0" inputmode="decimal" onchange="setRule('maxPosPct', this.value)"></div>
-          <div class="field"><label>기본 목표 비중 (%) · 일반 계좌</label><input id="rWeight" type="number" step="0.5" min="0" inputmode="decimal" onchange="setRule('weightPct', this.value)"></div>
-          <div class="field"><label>미래에셋 기준 금액 (원, 비우면 자동)</label><input id="rBase" type="number" step="any" min="0" inputmode="decimal" placeholder="자동" onchange="setRule('base', this.value)"></div>
+          <div class="field"><label>종목당 최대 비중 (%)</label><input id="rMaxPos" type="number" step="1" min="0" inputmode="decimal" onchange="setRule('maxPosPct', this.value)"></div>
+          <div class="field"><label>기준 금액 (원, 비우면 자동)</label><input id="rBase" type="number" step="any" min="0" inputmode="decimal" placeholder="자동" onchange="setRule('base', this.value)"></div>
         </div>
-        <div class="note" id="ruleInfo"></div>
+        <div class="note" id="ptRuleInfo"></div>
       </div>
 
       <div class="card">
-        <div class="card-label" id="planFormTitle">관심 종목 추가</div>
-        <div class="plan-grid">
-          <div class="field"><label>계좌</label><select id="pAcct" onchange="updatePlanPreview()"></select></div>
-          <div class="field"><label>종목명</label><input id="pName" placeholder="예: 삼성전자"></div>
-          <div class="field"><label>티커 (시세 자동)</label><input id="pTicker" placeholder="005930"></div>
-          <div class="field"><label>섹터</label><input id="pSector" list="sectorList" placeholder="예: 반도체"></div>
-          <div class="field"><label>셋업 · 유형</label><select id="pSetup" onchange="updatePlanPreview()"></select></div>
-          <div class="field"><label>매수가 (1차)</label><input id="pEntry" type="number" step="any" min="0" inputmode="decimal" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>손절가 (선택)</label><input id="pStop" type="number" step="any" min="0" inputmode="decimal" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>목표가 1차 (선택)</label><input id="pT1" type="number" step="any" min="0" inputmode="decimal" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>목표가 2차 (분할 청산 시)</label><input id="pT2" type="number" step="any" min="0" inputmode="decimal" placeholder="비우면 한 번에 청산" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>1차 청산 비율 (%)</label><input id="pPct" type="number" step="1" min="1" max="99" inputmode="decimal" value="50" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>2차 매수가 (분할 매수 시)</label><input id="pS2" type="number" step="any" min="0" inputmode="decimal" placeholder="비우면 한 번에 매수" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>3차 매수가 (선택)</label><input id="pS3" type="number" step="any" min="0" inputmode="decimal" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>분할 매수 비율 (%)</label><input id="pSplit" placeholder="예: 50, 30, 20 (비우면 균등)" oninput="updatePlanPreview()"></div>
-          <div class="field"><label>수량 기준</label><select id="pMode" onchange="updatePlanPreview()"><option value="auto">자동 (미래에셋+손절가=위험 기준, 그 외=목표 비중)</option><option value="risk">위험 기준 (손절폭)</option><option value="weight">계좌 대비 비중 (%)</option><option value="budget">투자 예산</option></select></div>
-          <div class="field"><label>비중(%) 또는 예산 (원/$)</label><input id="pSize" type="number" step="any" min="0" inputmode="decimal" placeholder="비우면 기본 목표 비중" oninput="updatePlanPreview()"></div>
-          <div class="field wide"><label>투자 근거 · 차트 메모</label><input id="pNote" placeholder="예: 60일선 지지 후 거래량 증가 / 실적 개선, 저평가 구간"></div>
-        </div>
-        <div class="plan-preview" id="planPreview">매수가를 입력하면 권장 수량이 바로 계산돼요. 손절가·목표가는 선택이고, 넣으면 손익비도 계산해요.</div>
-        <div class="row-add" style="margin-top:.75rem">
-          <button class="btn" id="planSaveBtn" onclick="savePlan()">관심 종목 추가</button>
-          <button class="btn ghost" id="planCancelBtn" style="display:none" onclick="resetPlanForm()">수정 취소</button>
-        </div>
+        <div class="card-label" id="ptTitle">트레이딩 후보 추가</div>
+        <div id="ptForm"></div>
       </div>
 
-      <div class="tabs" id="planTabs"></div>
-      <div id="planList"></div>
+      <div class="tabs" id="ptTabs"></div>
+      <div id="ptList"></div>
     </div>
 
     <div id="trPos" style="display:none">
-      <div class="note" style="margin:0 0 .75rem">손절가·목표가를 설정한 보유 종목(미래에셋 계좌는 전부)이에요. 입력해 두면 현재 몇 R인지 계산해 줘요. 손절가를 올려 가며 추적 손절해도 처음 손절가(최초 위험)는 따로 보관돼요.</div>
+      <div class="note" style="margin:0 0 .75rem">미래에셋 계좌의 보유 종목이에요. 손절가와 목표가를 입력해 두면 현재 몇 R인지 계산해 줘요. 손절가를 올려 가며 추적 손절해도 처음 손절가(최초 위험)는 따로 보관돼요.</div>
       <div id="posList"></div>
     </div>
 
@@ -429,7 +410,35 @@
       <div class="card"><div class="card-label">거래별 R · 누적 R</div><div class="chart-wrap"><canvas id="reviewChart" role="img" aria-label="거래별 R 막대와 누적 R 꺾은선 차트"></canvas></div></div>
       <div class="card"><div class="card-label">셋업별 성과</div><div class="table-scroll" id="setupStats"></div></div>
       <div class="card"><div class="card-label">청산 기록</div><div class="table-scroll" id="tradeLog"></div>
-        <div class="note">R = (청산가 − 평균 매수가) ÷ (평균 매수가 − 최초 손절가). 분할 청산은 청산할 때마다 1건으로 집계돼요. 수수료·세금은 반영하지 않았어요.</div></div>
+        <div class="note">R = (청산가 − 평균 매수가) ÷ (평균 매수가 − 최초 손절가). 분할 청산은 청산할 때마다 1건으로 집계돼요. 수수료·세금을 반영한 값이에요.</div></div>
+    </div>
+  </section>
+
+  <section class="page" data-page="invest">
+    <div class="tabs" id="ivTabs"></div>
+
+    <div id="ivPlans">
+      <div class="card">
+        <div class="card-label">투자 비중 규칙 (NH · 삼성 · 신한)</div>
+        <div class="rule-grid">
+          <div class="field"><label>기본 목표 비중 (%)</label><input id="rWeight" type="number" step="0.5" min="0" inputmode="decimal" onchange="setRule('weightPct', this.value)"></div>
+        </div>
+        <div class="note" id="ivRuleInfo"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-label" id="piTitle">투자 관심 종목 추가</div>
+        <div id="piForm"></div>
+      </div>
+
+      <div class="tabs" id="piTabs"></div>
+      <div id="piList"></div>
+    </div>
+
+    <div id="ivHold" style="display:none">
+      <div id="ivSummary"></div>
+      <div class="tabs" id="ivHoldTools"></div>
+      <div id="ivList"></div>
     </div>
   </section>
 
@@ -741,7 +750,7 @@ function delRealized(id) {
   state.realized = state.realized.filter(r => r.id !== id); persist(); render();
 }
 function setFilter(f) { filter = f; render(); }
-const PAGES = ['home', 'holdings', 'trend', 'rec', 'trade'], LS_PAGE = 'stockDashboardPage';
+const PAGES = ['home', 'holdings', 'trend', 'rec', 'trade', 'invest'], LS_PAGE = 'stockDashboardPage';
 function showPage(name, rerender = true) {
   if (name === 'monthly') { name = 'trend'; tMode = 'perf'; }      // 예전에 저장된 탭 이름
   if (name === 'money') { name = 'rec'; recTab = 'flows'; }
@@ -829,6 +838,7 @@ function render() {
   renderSectors();
   renderTrend();
   renderTrade();
+  renderInvest();
   renderRecords();
   renderHoldings();
   renderCashSection();
@@ -1071,7 +1081,7 @@ const SETUPS = [
   { name: '박스권 돌파', dir: 'break' }, { name: '신고가 돌파', dir: 'break' },
   { name: '장기 매수', dir: null }, { name: '분할 매수', dir: null }, { name: '배당·가치', dir: null }, { name: '기타', dir: null },
 ];
-let trTab = 'plans', planFilter = 'active', planAcct = 'all', editingPlan = null, reviewChart = null;
+let trTab = 'plans', planAcct = 'all', reviewChart = null;
 const won = v => Math.round(v).toLocaleString('ko-KR') + '원';
 const num = id => parseFloat(document.getElementById(id).value);
 
@@ -1086,8 +1096,6 @@ function setRule(key, v) {
   state.trade[key] = n >= 0 ? n : (key === 'base' ? 0 : state.trade[key]);
   persist(); render();
 }
-function setTrTab(t) { trTab = t; renderTrade(); }
-function setPlanFilter(f) { planFilter = f; renderTrade(); }
 
 // 한 종목의 손익비, 손절폭, 권장 수량 계산 (손절·목표가는 선택, 모든 계좌 공통)
 function accountBase(acct) {                                     // 계좌 평가금액 + 예수금 (계좌 통화 기준)
@@ -1147,16 +1155,58 @@ function buildStages(entry, s2, s3, splitText) {                  // 분할 매�
   const sum = pcts.reduce((a, b) => a + b, 0);
   return prices.map((price, i) => ({ price, pct: pcts[i] / sum * 100, done: false }));
 }
-function readPlanForm() {
-  const entry = num('pEntry'), stages = buildStages(entry, num('pS2'), num('pS3'), val('pSplit'));
-  return { account: val('pAcct') || 'mirae', name: val('pName').trim(), ticker: val('pTicker').trim(), sector: val('pSector').trim(), setup: val('pSetup'),
-    entry, stages, stop: num('pStop') || 0, t1: num('pT1') || 0, t2: num('pT2') || 0, t1pct: num('pPct') || 50,
-    mode: val('pMode') || 'auto', size: num('pSize') || 0, note: val('pNote').trim() };
+// 트레이딩(미래에셋)과 투자(NH·삼성·신한)를 완전히 나눠서 관리: 계좌로 구분
+const KIND = { trade: { pre: 'pt', label: '트레이딩' }, invest: { pre: 'pi', label: '투자' } };
+const kindOf = acct => acct === 'mirae' ? 'trade' : 'invest';
+const INVEST_ACCTS = ACCOUNTS.filter(a => a.id !== 'mirae');
+const SETUP_NAMES = { trade: ['눌림목', '이평선 지지', '박스권 돌파', '신고가 돌파', '기타'], invest: ['장기 매수', '분할 매수', '배당·가치', '기타'] };
+const planFilter = { trade: 'active', invest: 'active' }, editing = { trade: null, invest: null };
+let ivTab = 'plans', ivAcct = 'all';
+
+function planFormHtml(kind) {
+  const pre = KIND[kind].pre, fn = `updatePlanPreview('${kind}')`;
+  const f = (k, label, input, cls) => `<div class="field ${cls || ''}"><label>${label}</label>${input}</div>`;
+  const n = (k, ph) => `<input id="${pre}${k}" type="number" step="any" min="0" inputmode="decimal" placeholder="${ph || ''}" oninput="${fn}">`;
+  const t = (k, ph, extra) => `<input id="${pre}${k}" placeholder="${ph || ''}" ${extra || ''}>`;
+  const setups = `<select id="${pre}Setup" onchange="${fn}">${SETUP_NAMES[kind].map(s => `<option>${s}</option>`).join('')}</select>`;
+  const common = f('Name', '종목명', t('Name', '예: 삼성전자')) + f('Ticker', '티커 (시세 자동)', t('Ticker', '005930')) + f('Sector', '섹터', t('Sector', '예: 반도체', 'list="sectorList"'));
+  let grid;
+  if (kind === 'trade') {
+    grid = common + f('Setup', '셋업', setups) + f('Entry', '매수가', n('Entry')) + f('Stop', '손절가', n('Stop')) + f('T1', '목표가 1차', n('T1')) +
+      f('T2', '목표가 2차 (분할 청산 시)', n('T2', '비우면 한 번에 청산')) + f('Pct', '1차 청산 비율 (%)', `<input id="${pre}Pct" type="number" step="1" min="1" max="99" inputmode="decimal" value="50" oninput="${fn}">`) +
+      f('Note', '차트 근거 · 메모', t('Note', '예: 60일선 지지 후 거래량 증가, 박스 상단 52,000'), 'wide');
+  } else {
+    grid = f('Acct', '계좌', `<select id="${pre}Acct" onchange="${fn}">${INVEST_ACCTS.map(a => `<option value="${a.id}">${a.name}${a.cur === 'USD' ? ' (USD)' : ''}</option>`).join('')}</select>`) + common +
+      f('Setup', '유형', setups) + f('Entry', '매수가 (1차)', n('Entry')) + f('S2', '2차 매수가 (분할 매수 시)', n('S2', '비우면 한 번에 매수')) + f('S3', '3차 매수가 (선택)', n('S3')) +
+      f('Split', '분할 매수 비율 (%)', t('Split', '예: 50, 30, 20 (비우면 균등)', `oninput="${fn}"`)) +
+      f('Mode', '수량 기준', `<select id="${pre}Mode" onchange="${fn}"><option value="auto">자동 (계좌 대비 목표 비중)</option><option value="weight">계좌 대비 비중 (%)</option><option value="budget">투자 예산</option></select>`) +
+      f('Size', '비중(%) 또는 예산 (원/$)', n('Size', '비우면 기본 목표 비중')) +
+      f('Note', '투자 근거 · 메모', t('Note', '예: 실적 개선, 저평가 구간, 배당 매력'), 'wide') +
+      `<details class="wide" style="grid-column:1/-1"><summary style="font-size:13px;cursor:pointer;color:var(--text-secondary)">손절가·목표가 (선택)</summary><div class="plan-grid" style="margin-top:8px">` +
+      f('Stop', '손절가', n('Stop')) + f('T1', '목표가 1차', n('T1')) + f('T2', '목표가 2차', n('T2')) +
+      f('Pct', '1차 청산 비율 (%)', `<input id="${pre}Pct" type="number" step="1" min="1" max="99" inputmode="decimal" value="50" oninput="${fn}">`) + `</div></details>`;
+  }
+  return `<div class="plan-grid">${grid}</div>
+    <div class="plan-preview" id="${pre}Preview"></div>
+    <div class="row-add" style="margin-top:.75rem">
+      <button class="btn" id="${pre}Save" onclick="savePlan('${kind}')">${KIND[kind].label} 관심 종목 추가</button>
+      <button class="btn ghost" id="${pre}Cancel" style="display:none" onclick="resetPlanForm('${kind}')">수정 취소</button>
+    </div>`;
 }
-function updatePlanPreview() {
-  const p = readPlanForm(), el = document.getElementById('planPreview'), a = ACCT[p.account];
+function ensureForms() {
+  [['trade', 'ptForm'], ['invest', 'piForm']].forEach(([kind, id]) => { const el = document.getElementById(id); if (!el.children.length) el.innerHTML = planFormHtml(kind); });
+}
+function readPlanForm(kind) {
+  const pre = KIND[kind].pre, g = k => val(pre + k), n = k => num(pre + k), entry = n('Entry');
+  const inv = kind === 'invest';
+  return { account: inv ? (g('Acct') || 'nh') : 'mirae', name: g('Name').trim(), ticker: g('Ticker').trim(), sector: g('Sector').trim(), setup: g('Setup'),
+    entry, stages: inv ? buildStages(entry, n('S2'), n('S3'), g('Split')) : [], stop: n('Stop') || 0, t1: n('T1') || 0, t2: n('T2') || 0, t1pct: n('Pct') || 50,
+    mode: inv ? (g('Mode') || 'auto') : 'auto', size: inv ? (n('Size') || 0) : 0, note: g('Note').trim() };
+}
+function updatePlanPreview(kind) {
+  const el = document.getElementById(KIND[kind].pre + 'Preview'), p = readPlanForm(kind), a = ACCT[p.account];
   const c = calcPlan(p, accountBase(p.account));
-  if (!c.valid) { el.textContent = p.entry > 0 ? c.reason : '매수가를 입력하면 권장 수량이 바로 계산돼요. 손절가·목표가는 선택이고, 넣으면 손익비도 계산해요.'; return; }
+  if (!c.valid) { el.textContent = p.entry > 0 ? c.reason : (kind === 'trade' ? '매수가, 손절가, 목표가를 입력하면 손익비와 권장 수량이 바로 계산돼요.' : '매수가를 입력하면 권장 수량이 바로 계산돼요. 분할 매수와 손절가·목표가는 선택이에요.'); return; }
   const f = v => fmtCash(v, p.account), parts = [];
   if (c.rr !== null) { const ok = c.rr >= state.trade.minRR; parts.push(`손익비 <b class="${ok ? 'ok' : 'bad'}">${c.rr.toFixed(2)} : 1</b> ${ok ? '(기준 통과)' : `(기준 ${state.trade.minRR}:1 미달)`}`); }
   if (c.stopPct !== null) parts.push(`손절폭 -${c.stopPct.toFixed(1)}%`);
@@ -1167,43 +1217,49 @@ function updatePlanPreview() {
     (c.loss !== null ? ` · 손절 시 -${f(c.loss)}` : '') +
     (sq ? `<br>분할 매수: ${p.stages.map((s, i) => `${i + 1}차 ${f(s.price)} (${Math.round(s.pct)}% · ${sq[i]}주)`).join(' → ')} · 평균 ${f(c.entry)}` : '');
 }
-function savePlan() {
-  const p = readPlanForm();
+function savePlan(kind) {
+  const p = readPlanForm(kind);
   if (!p.name) { alert('종목명을 입력해 주세요.'); return; }
   if (!(p.entry > 0)) { alert('매수가를 입력해 주세요.'); return; }
+  if (kind === 'trade' && (!(p.stop > 0) || !(p.t1 > 0))) { alert('매수가, 손절가, 목표가(1차)를 입력해 주세요.'); return; }
   if (p.stop && !(p.stop < p.entry)) { alert('손절가는 매수가보다 낮아야 해요.'); return; }
   if (p.t1 && !(p.t1 > p.entry)) { alert('목표가는 매수가보다 높아야 해요.'); return; }
   if (p.t2 && !(p.t2 > p.t1)) { alert('2차 목표가는 1차 목표가보다 높아야 해요.'); return; }
-  if (!p.t1) { p.t2 = 0; }
+  if (!p.t1) p.t2 = 0;
   const c = calcPlan(p, accountBase(p.account));
   if (!c.valid) { alert(c.reason); return; }
-  if (editingPlan) {
-    const old = state.plans.find(x => x.id === editingPlan);
+  if (editing[kind]) {
+    const old = state.plans.find(x => x.id === editing[kind]);
     if (old.stages && old.stages.length) p.stages.forEach((s, i) => { if (old.stages[i]) s.done = !!old.stages[i].done; });   // 이미 산 단계는 유지
     Object.assign(old, p);
   } else state.plans.push({ id: uid(), status: 'watch', createdAt: todayStr(), cur: 0, ...p });
-  ensureSector(p.sector); resetPlanForm(); persist(); render();
+  ensureSector(p.sector); resetPlanForm(kind); persist(); render();
 }
 function editPlan(id) {
   const p = state.plans.find(x => x.id === id); if (!p) return;
-  editingPlan = id;
-  const set = (k, v) => document.getElementById(k).value = v || '';
-  set('pAcct', p.account || 'mirae'); set('pName', p.name); set('pTicker', p.ticker); set('pSector', p.sector); set('pSetup', p.setup); set('pEntry', p.stages && p.stages.length ? p.stages[0].price : p.entry);
-  set('pStop', p.stop); set('pT1', p.t1); set('pT2', p.t2); set('pPct', p.t1pct || 50); set('pNote', p.note); set('pMode', p.mode || 'auto'); set('pSize', p.size);
-  const st = p.stages || []; set('pS2', st[1] ? st[1].price : ''); set('pS3', st[2] ? st[2].price : ''); set('pSplit', st.length ? st.map(s => Math.round(s.pct)).join(', ') : '');
-  document.getElementById('planFormTitle').textContent = `관심 종목 수정 — ${p.name}`;
-  document.getElementById('planSaveBtn').textContent = '수정 저장';
-  document.getElementById('planCancelBtn').style.display = '';
-  updatePlanPreview(); document.getElementById('pName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const kind = kindOf(p.account), pre = KIND[kind].pre; editing[kind] = id;
+  const set = (k, v) => { const el = document.getElementById(pre + k); if (el) el.value = v || ''; };
+  set('Name', p.name); set('Ticker', p.ticker); set('Sector', p.sector); set('Setup', p.setup); set('Entry', p.stages && p.stages.length ? p.stages[0].price : p.entry);
+  set('Stop', p.stop); set('T1', p.t1); set('T2', p.t2); set('Pct', p.t1pct || 50); set('Note', p.note);
+  if (kind === 'invest') {
+    set('Acct', p.account); set('Mode', p.mode || 'auto'); set('Size', p.size);
+    const st = p.stages || []; set('S2', st[1] ? st[1].price : ''); set('S3', st[2] ? st[2].price : ''); set('Split', st.length ? st.map(s => Math.round(s.pct)).join(', ') : '');
+    if (p.stop || p.t1) { const d = document.querySelector('#piForm details'); if (d) d.open = true; }
+  }
+  document.getElementById(pre + 'Title').textContent = `${KIND[kind].label} 관심 종목 수정 — ${p.name}`;
+  document.getElementById(pre + 'Save').textContent = '수정 저장';
+  document.getElementById(pre + 'Cancel').style.display = '';
+  updatePlanPreview(kind); document.getElementById(pre + 'Name').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-function resetPlanForm() {
-  editingPlan = null;
-  ['pName', 'pTicker', 'pSector', 'pEntry', 'pStop', 'pT1', 'pT2', 'pS2', 'pS3', 'pSplit', 'pSize', 'pNote'].forEach(k => document.getElementById(k).value = '');
-  document.getElementById('pPct').value = 50; document.getElementById('pSetup').selectedIndex = 0; document.getElementById('pMode').value = 'auto';
-  document.getElementById('planFormTitle').textContent = '관심 종목 추가';
-  document.getElementById('planSaveBtn').textContent = '관심 종목 추가';
-  document.getElementById('planCancelBtn').style.display = 'none';
-  updatePlanPreview();
+function resetPlanForm(kind) {
+  const pre = KIND[kind].pre; editing[kind] = null;
+  ['Name', 'Ticker', 'Sector', 'Entry', 'Stop', 'T1', 'T2', 'S2', 'S3', 'Split', 'Size', 'Note'].forEach(k => { const el = document.getElementById(pre + k); if (el) el.value = ''; });
+  document.getElementById(pre + 'Pct').value = 50; document.getElementById(pre + 'Setup').selectedIndex = 0;
+  const m = document.getElementById(pre + 'Mode'); if (m) m.value = 'auto';
+  document.getElementById(pre + 'Title').textContent = `${KIND[kind].label} ${kind === 'trade' ? '후보' : '관심 종목'} 추가`;
+  document.getElementById(pre + 'Save').textContent = `${KIND[kind].label} 관심 종목 추가`;
+  document.getElementById(pre + 'Cancel').style.display = 'none';
+  updatePlanPreview(kind);
 }
 
 function setPlanStatus(id, v) { const p = state.plans.find(x => x.id === id); if (p) { p.status = v; persist(); render(); } }
@@ -1251,6 +1307,7 @@ function confirmEntry(id, idx) {
   } else {
     h = { id: uid(), account: ac, name: p.name, ticker: p.ticker || '', sector: p.sector || '', qty, avg: (price * qty + fee) / qty, cur: p.cur > 0 ? p.cur : price,
       stop: p.stop || 0, stop0: p.stop || 0, t1: p.t1 || 0, t2: p.t2 || 0, t1pct: p.t1pct || 50, setup: p.setup, planId: p.id, entryDate: date };
+    if (kindOf(ac) === 'invest' && planMode(p) === 'weight') h.targetPct = p.size > 0 ? p.size : state.trade.weightPct;   // 투자: 계획한 비중을 목표 비중으로
     state.holdings.push(h); p.holdingId = h.id;
   }
   ensureSector(h.sector);
@@ -1261,7 +1318,7 @@ function confirmEntry(id, idx) {
   addJournal({ type: 'buy', source: 'plan', cashUsed: used, fee, date, account: ac, name: p.name, ticker: p.ticker || '', price, qty, holdingId: h.id,
     avgBefore: avgBefore, avgAfter: avgBefore !== undefined ? h.avg : undefined,
     reason: p.note || '', tags: [p.setup, staged ? `분할 ${idx + 1}차` : ''].filter(Boolean) });
-  closeDlg(); if (p.stop > 0 && p.status === 'entered') trTab = 'pos'; persist(); render();
+  closeDlg(); if (kindOf(ac) === 'trade' && p.stop > 0 && p.status === 'entered') trTab = 'pos'; persist(); render();
 }
 function updatePos(id, field, v) {
   const h = state.holdings.find(x => x.id === id); const n = parseFloat(v);
@@ -1330,42 +1387,62 @@ function posNote(h) {                                            // 보유 종�
 }
 
 /* 렌더링 */
+function setTrTab(t) { trTab = t; renderTrade(); }
+function setIvTab(t) { ivTab = t; renderInvest(); }
+function setPlanFilter(kind, f) { planFilter[kind] = f; renderPlans(kind); }
+function setPlanAcct(a) { planAcct = a; renderPlans('invest'); }
+function setIvAcct(a) { ivAcct = a; renderHold(); }
+function setTarget(id, v) { const h = state.holdings.find(x => x.id === id), n = parseFloat(v); if (h) { h.targetPct = n > 0 ? n : 0; persist(); render(); } }
+
 function renderTrade() {
-  const tabs = [['plans', '🎯 관심 종목'], ['pos', '📌 포지션'], ['review', '📊 복기 통계']];
+  ensureForms();
+  const tabs = [['plans', '🎯 트레이딩 후보'], ['pos', '📌 포지션'], ['review', '📊 복기 통계']];
   document.getElementById('trTabs').innerHTML = tabs.map(([id, name]) => `<button class="tab ${trTab === id ? 'active' : ''}" onclick="setTrTab('${id}')">${name}</button>`).join('');
   ['plans', 'pos', 'review'].forEach(id => document.getElementById('tr' + id[0].toUpperCase() + id.slice(1)).style.display = trTab === id ? '' : 'none');
-  const sel = document.getElementById('pSetup'); if (!sel.options.length) sel.innerHTML = SETUPS.map(s => `<option>${s.name}</option>`).join('');
-  const acc = document.getElementById('pAcct'); if (!acc.options.length) { acc.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name}${a.cur === 'USD' ? ' (USD)' : ''}</option>`).join(''); acc.value = 'mirae'; }
-  [['rRisk', 'riskPct'], ['rRR', 'minRR'], ['rMaxPos', 'maxPosPct'], ['rWeight', 'weightPct'], ['rBase', 'base']].forEach(([id, k]) => {
+  [['rRisk', 'riskPct'], ['rRR', 'minRR'], ['rMaxPos', 'maxPosPct'], ['rBase', 'base']].forEach(([id, k]) => {
     const el = document.getElementById(id); if (document.activeElement !== el) el.value = state.trade[k] || '';
   });
-  if (trTab === 'plans') renderPlans(); else if (trTab === 'pos') renderPositions(); else renderReview();
+  if (trTab === 'plans') renderPlans('trade'); else if (trTab === 'pos') renderPositions(); else renderReview();
 }
-function setPlanAcct(a) { planAcct = a; renderPlans(); }
-function renderPlans() {
-  const t = state.trade, mb = tradeBase();
-  document.getElementById('ruleInfo').innerHTML = (mb > 0
-    ? `미래에셋 기준 금액 <b>${won(mb)}</b>${t.base > 0 ? ' (직접 입력)' : ' (평가금액 + 예수금)'} · 1회 허용 손실 <b>${won(mb * t.riskPct / 100)}</b> · 종목당 최대 투입 ${won(mb * t.maxPosPct / 100)}`
-    : '미래에셋 계좌에 종목이나 예수금이 없어서 기준 금액을 계산할 수 없어요. 위 "기준 금액"에 직접 입력해 주세요.') +
-    '<br>다른 계좌는 그 계좌의 평가금액 + 예수금을 기준으로, 수량 기준이 "자동"이면 기본 목표 비중으로 계산해요.';
-  updatePlanPreview();
+function renderInvest() {
+  ensureForms();
+  const tabs = [['plans', '🌱 투자 관심 종목'], ['hold', '📈 보유 현황']];
+  document.getElementById('ivTabs').innerHTML = tabs.map(([id, name]) => `<button class="tab ${ivTab === id ? 'active' : ''}" onclick="setIvTab('${id}')">${name}</button>`).join('');
+  document.getElementById('ivPlans').style.display = ivTab === 'plans' ? '' : 'none';
+  document.getElementById('ivHold').style.display = ivTab === 'hold' ? '' : 'none';
+  const el = document.getElementById('rWeight'); if (document.activeElement !== el) el.value = state.trade.weightPct || '';
+  if (ivTab === 'plans') renderPlans('invest'); else renderHold();
+}
+
+function renderPlans(kind) {
+  const t = state.trade, pre = KIND[kind].pre;
+  if (kind === 'trade') {
+    const mb = tradeBase();
+    document.getElementById('ptRuleInfo').innerHTML = mb > 0
+      ? `기준 금액 <b>${won(mb)}</b>${t.base > 0 ? ' (직접 입력)' : ' (미래에셋 평가금액 + 예수금)'} · 1회 허용 손실 <b>${won(mb * t.riskPct / 100)}</b> · 종목당 최대 투입 ${won(mb * t.maxPosPct / 100)}`
+      : '미래에셋 계좌에 종목이나 예수금이 없어서 기준 금액을 계산할 수 없어요. 위 "기준 금액"에 직접 입력해 주세요.';
+  } else {
+    document.getElementById('ivRuleInfo').innerHTML = '수량 기준이 "자동"이면 각 계좌(평가금액 + 예수금)의 기본 목표 비중만큼 사도록 계산하고, 매수가 끝나면 그 비중이 종목의 목표 비중이 돼요.';
+  }
+  updatePlanPreview(kind);
+  const mine = state.plans.filter(p => ACCT[p.account] && kindOf(p.account) === kind);
   const counts = { watch: 0, ready: 0, done: 0 };
-  state.plans.forEach(p => { if (p.status === 'watch') counts.watch++; else if (p.status === 'ready') counts.ready++; else counts.done++; });
-  document.getElementById('planTabs').innerHTML = [['active', `진행 중 ${counts.watch + counts.ready}`], ['watch', `관찰 ${counts.watch}`], ['ready', `매수 대기 ${counts.ready}`], ['done', `종료 ${counts.done}`]]
-    .map(([id, name]) => `<button class="tab ${planFilter === id ? 'active' : ''}" onclick="setPlanFilter('${id}')">${name}</button>`).join('') +
-    `<span style="flex:1"></span><select class="plan-acct" onchange="setPlanAcct(this.value)" aria-label="계좌 필터"><option value="all">전체 계좌</option>${ACCOUNTS.map(a => `<option value="${a.id}" ${planAcct === a.id ? 'selected' : ''}>${a.name}</option>`).join('')}</select>`;
-  const match = p => (planAcct === 'all' || (p.account || 'mirae') === planAcct) &&
-    (planFilter === 'active' ? (p.status === 'watch' || p.status === 'ready') : planFilter === 'done' ? (p.status === 'dropped' || p.status === 'entered') : p.status === planFilter);
-  const list = state.plans.filter(p => ACCT[p.account || 'mirae']).map(p => ({ p: p.account ? p : { ...p, account: 'mirae' }, orig: p })).filter(({ p }) => match(p))
-    .map(({ p }) => ({ p, c: calcPlan(p, accountBase(p.account)), f: planFlag(p) }))
+  mine.forEach(p => { if (p.status === 'watch') counts.watch++; else if (p.status === 'ready') counts.ready++; else counts.done++; });
+  const flt = planFilter[kind];
+  document.getElementById(pre + 'Tabs').innerHTML = [['active', `진행 중 ${counts.watch + counts.ready}`], ['watch', `관찰 ${counts.watch}`], ['ready', `매수 대기 ${counts.ready}`], ['done', `종료 ${counts.done}`]]
+    .map(([id, name]) => `<button class="tab ${flt === id ? 'active' : ''}" onclick="setPlanFilter('${kind}', '${id}')">${name}</button>`).join('') +
+    (kind === 'invest' ? `<span style="flex:1"></span><select class="plan-acct" onchange="setPlanAcct(this.value)" aria-label="계좌 필터"><option value="all">전체 계좌</option>${INVEST_ACCTS.map(a => `<option value="${a.id}" ${planAcct === a.id ? 'selected' : ''}>${a.name}</option>`).join('')}</select>` : '');
+  const match = p => (kind === 'trade' || planAcct === 'all' || p.account === planAcct) &&
+    (flt === 'active' ? (p.status === 'watch' || p.status === 'ready') : flt === 'done' ? (p.status === 'dropped' || p.status === 'entered') : p.status === flt);
+  const list = mine.filter(match).map(p => ({ p, c: calcPlan(p, accountBase(p.account)), f: planFlag(p) }))
     .sort((a, b) => (a.f ? Math.abs(a.f.dist) : 1e9) - (b.f ? Math.abs(b.f.dist) : 1e9) || b.p.createdAt.localeCompare(a.p.createdAt));
-  if (!list.length) { document.getElementById('planList').innerHTML = '<div class="card"><div class="empty">관심 종목이 없습니다.<br>위에서 관심 종목을 추가해 보세요.</div></div>'; return; }
-  document.getElementById('planList').innerHTML = '<div class="pcards">' + list.map(({ p, c, f }) => {
+  if (!list.length) { document.getElementById(pre + 'List').innerHTML = `<div class="card"><div class="empty">${kind === 'trade' ? '트레이딩 후보가 없습니다.<br>위에서 매수 후보를 추가해 보세요.' : '투자 관심 종목이 없습니다.<br>위에서 관심 종목을 추가해 보세요.'}</div></div>`; return; }
+  document.getElementById(pre + 'List').innerHTML = '<div class="pcards">' + list.map(({ p, c, f }) => {
     const a = ACCT[p.account], fm = v => fmtCash(v, p.account), stages = stageList(p), staged = stages.length > 1, ni = nextStage(p);
     const pass = c.valid && c.rr !== null && c.rr >= t.minRR, sq = c.valid && staged ? stageQtys(c.qty, p.stages) : null;
     const stNames = { watch: '관찰', ready: '매수 대기', dropped: '폐기', entered: '매수 완료' };
     return `<div class="pcard ${c.valid ? '' : 'invalid'}">
-      <div class="pc-top"><div><span class="dot" style="--c:${a.color}"></span><span class="pc-title">${esc(p.name)}</span>${p.ticker ? `<span class="tag">${esc(p.ticker)}</span>` : ''}<span class="pill">${a.name}</span><span class="pill">${esc(p.setup || '기타')}</span>${p.sector ? `<span class="pill">${esc(p.sector)}</span>` : ''}
+      <div class="pc-top"><div><span class="dot" style="--c:${a.color}"></span><span class="pc-title">${esc(p.name)}</span>${p.ticker ? `<span class="tag">${esc(p.ticker)}</span>` : ''}${kind === 'invest' ? `<span class="pill">${a.name}</span>` : ''}<span class="pill">${esc(p.setup || '기타')}</span>${p.sector ? `<span class="pill">${esc(p.sector)}</span>` : ''}
         ${c.valid ? (c.rr !== null ? `<span class="pill ${pass ? 'ok' : 'warn'}">손익비 ${c.rr.toFixed(2)}:1 ${pass ? '✔' : '미달'}</span>` : '') : '<span class="pill bad">가격 확인 필요</span>'}</div>
         <div><button class="icon-btn" onclick="editPlan('${p.id}')" title="수정">✎</button><button class="icon-btn" onclick="delPlan('${p.id}')" title="삭제">✕</button></div></div>
       <div class="pc-levels">
@@ -1386,16 +1463,17 @@ function renderPlans() {
       </div></div>`;
   }).join('') + '</div>';
 }
-function renderPositions() {
-  const rows = state.holdings.filter(h => h.account === 'mirae' || h.stop > 0 || h.t1 > 0);
-  if (!rows.length) { document.getElementById('posList').innerHTML = '<div class="card"><div class="empty">손절가·목표가를 설정한 보유 종목이 없어요.<br>관심 종목에서 "매수 완료"를 누르면 자동으로 들어오고, 보유 종목에서도 설정할 수 있어요.</div></div>'; return; }
+
+function renderPositions() {                                      // 트레이딩: 미래에셋 보유 종목
+  const rows = state.holdings.filter(h => h.account === 'mirae');
+  if (!rows.length) { document.getElementById('posList').innerHTML = '<div class="card"><div class="empty">미래에셋 계좌에 보유 종목이 없어요.<br>후보에서 "매수 완료"를 누르거나 보유 종목 탭에서 추가해 주세요.</div></div>'; return; }
   document.getElementById('posList').innerHTML = '<div class="pcards">' + rows.map(h => {
-    const a = ACCT[h.account], fm = v => fmtCash(v, h.account), pnl = (h.cur - h.avg) * h.qty, ret = h.avg ? (h.cur - h.avg) / h.avg * 100 : 0;
+    const fm = v => fmtCash(v, h.account), pnl = (h.cur - h.avg) * h.qty, ret = h.avg ? (h.cur - h.avg) / h.avg * 100 : 0;
     const r0 = h.avg - (h.stop0 || h.stop || 0), R = h.stop > 0 && r0 > 0 ? (h.cur - h.avg) / r0 : null;
     const atStop = h.stop > 0 ? (h.stop - h.avg) * h.qty : null, toT1 = h.t1 > 0 ? (h.t1 - h.avg) * h.qty : null;
     const warn = h.stop > 0 && h.cur > 0 && h.cur <= h.stop;
     return `<div class="pcard">
-      <div class="pc-top"><div><span class="dot" style="--c:${a.color}"></span><span class="pc-title">${esc(h.name)}</span>${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}<span class="pill">${a.name}</span>${h.setup ? `<span class="pill">${esc(h.setup)}</span>` : ''}
+      <div class="pc-top"><div><span class="pc-title">${esc(h.name)}</span>${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}${h.setup ? `<span class="pill">${esc(h.setup)}</span>` : ''}
         ${R !== null ? `<span class="pill ${R > 0 ? 'ok' : R < 0 ? 'bad' : ''}">${R > 0 ? '+' : ''}${R.toFixed(2)}R</span>` : ''}${warn ? '<span class="pill bad">손절가 이탈</span>' : ''}</div></div>
       <div class="pc-levels">
         <div><span>평균가</span><b>${fm(h.avg)}</b></div>
@@ -1413,6 +1491,44 @@ function renderPositions() {
   }).join('') + '</div>';
 }
 
+function renderHold() {                                           // 투자: NH·삼성·신한 보유 현황 + 목표 비중 대비 현재 비중
+  const { per } = compute();
+  const accts = INVEST_ACCTS.filter(a => ivAcct === 'all' || a.id === ivAcct);
+  document.getElementById('ivHoldTools').innerHTML = [['all', '전체'], ...INVEST_ACCTS.map(a => [a.id, a.name])]
+    .map(([id, name]) => `<button class="tab ${ivAcct === id ? 'active' : ''}" onclick="setIvAcct('${id}')">${name}</button>`).join('');
+  document.getElementById('ivSummary').innerHTML = `<div class="card"><div class="card-label">계좌별 현황 (평가금액 + 예수금)</div>` + accts.map(a => {
+    const p = per[a.id], base = accountBase(a.id), cash = Number(state.cash[a.id]) || 0, stock = base - cash;
+    return `<div class="cash-row"><span><span class="dot" style="--c:${a.color}"></span>${a.name}</span>
+      <span class="sub">주식 ${fmtCash(stock, a.id)} + 예수금 ${fmtCash(cash, a.id)}</span>
+      <span class="sub">합계 <b>${fmtCash(base, a.id)}</b> · 예수금 ${base ? (cash / base * 100).toFixed(1) : '0.0'}% · 평가손익 <span class="${cls(p.unreal)}">${signKRW(p.unreal)}</span></span></div>`; }).join('') + '</div>';
+  const rows = state.holdings.filter(h => accts.some(a => a.id === h.account)).sort((x, y) => toKRW(y.qty * y.cur, y.account) - toKRW(x.qty * x.cur, x.account));
+  if (!rows.length) { document.getElementById('ivList').innerHTML = '<div class="card"><div class="empty">투자 계좌(NH·삼성·신한)에 보유 종목이 없어요.<br>관심 종목에서 "매수 완료"를 누르거나 보유 종목 탭에서 추가해 주세요.</div></div>'; return; }
+  document.getElementById('ivList').innerHTML = '<div class="pcards">' + rows.map(h => {
+    const a = ACCT[h.account], fm = v => fmtCash(v, h.account), base = accountBase(h.account);
+    const val = h.qty * h.cur, pnl = (h.cur - h.avg) * h.qty, ret = h.avg ? (h.cur - h.avg) / h.avg * 100 : 0;
+    const curW = base ? val / base * 100 : 0, tgt = h.targetPct > 0 ? h.targetPct : 0, diff = tgt - curW;
+    let status = '<span class="pill">목표 비중을 입력하면 비교해 줘요</span>', gap = '';
+    if (tgt > 0) {
+      if (diff > 1) { const amt = diff / 100 * base; status = `<span class="pill warn">목표까지 +${diff.toFixed(1)}%p 부족</span>`; gap = `약 ${fm(amt)} · ${h.cur > 0 ? Math.floor(amt / h.cur) : 0}주 더 매수할 수 있어요`; }
+      else if (diff < -1) { const amt = -diff / 100 * base; status = `<span class="pill ok">목표 ${(-diff).toFixed(1)}%p 초과</span>`; gap = `약 ${fm(amt)} · ${h.cur > 0 ? Math.floor(amt / h.cur) : 0}주를 줄이면 목표 비중이에요`; }
+      else status = '<span class="pill good">목표 비중 근접</span>';
+    }
+    return `<div class="pcard">
+      <div class="pc-top"><div><span class="dot" style="--c:${a.color}"></span><span class="pc-title">${esc(h.name)}</span>${h.ticker ? `<span class="tag">${esc(h.ticker)}</span>` : ''}<span class="pill">${a.name}</span>${h.setup ? `<span class="pill">${esc(h.setup)}</span>` : ''}${h.sector ? `<span class="pill">${esc(h.sector)}</span>` : ''}</div></div>
+      <div class="pc-levels">
+        <div><span>평균가</span><b>${fm(h.avg)}</b></div>
+        <div><span>현재가</span><b class="${cls(ret)}">${fm(h.cur)}</b><small class="${cls(ret)}">${fmtPct(ret)}</small></div>
+        <div><span>수량</span><b>${h.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주</b></div>
+        <div><span>평가손익</span><b class="${cls(pnl)}">${sgn(pnl, h.account)}</b></div>
+      </div>
+      <div class="pc-line">현재 비중 <b>${curW.toFixed(1)}%</b>${tgt > 0 ? ` / 목표 <b>${tgt}%</b>` : ''} ${status}</div>
+      ${tgt > 0 ? `<div class="wbar"><i style="width:${Math.min(curW / Math.max(tgt, curW, 1) * 100, 100)}%"></i><b style="left:${Math.min(tgt / Math.max(tgt, curW, 1) * 100, 100)}%"></b></div>` : ''}
+      ${gap ? `<div class="pc-line">${gap}</div>` : ''}
+      <div class="hc-grid"><label>목표 비중 (%)<input type="number" step="0.5" min="0" inputmode="decimal" value="${tgt || ''}" placeholder="예: 5" onchange="setTarget('${h.id}', this.value)"></label></div>
+      <div class="pc-actions"><button class="mini buy" onclick="openBuy('${h.id}')">매수 기록</button><button class="mini sell" onclick="openSell('${h.id}')">매도 기록</button></div></div>`;
+  }).join('') + '</div>';
+}
+
 function reviewStats(trades) {
   const n = trades.length, wins = trades.filter(t => t.pnl > 0), losses = trades.filter(t => t.pnl < 0);
   const withR = trades.filter(t => t.R !== null && t.R !== undefined);
@@ -1424,7 +1540,7 @@ function reviewStats(trades) {
     winR, lossR, payoff: winR !== null && lossR !== null && lossR !== 0 ? winR / Math.abs(lossR) : null, pf: loss > 0 ? gain / loss : (gain > 0 ? Infinity : null), hold: mean(holds) };
 }
 function renderReview() {
-  const trades = state.trades.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const trades = state.trades.filter(t => (t.account || 'mirae') === 'mirae').sort((a, b) => a.date.localeCompare(b.date));
   if (reviewChart) { reviewChart.destroy(); reviewChart = null; }
   if (!trades.length) {
     document.getElementById('reviewStats').innerHTML = '<div class="card"><div class="empty">아직 청산 기록이 없어요.<br>포지션 탭에서 "청산 기록"을 남기면 승률, 평균 R, 기대값이 쌓여요.</div></div>';
@@ -1553,7 +1669,7 @@ function confirmBuy(id) {
 /* 매도 기록: 수량 감소 + 실현손익(수수료·세금 반영) + 예수금 가산 + 일지 */
 function openSell(id) {
   const h = state.holdings.find(x => x.id === id); if (!h) return;
-  if (h.stop0 > 0) { openExit(id); return; }                      // 트레이딩 포지션은 R 통계를 위해 청산 기록 창 사용
+  if (h.stop0 > 0 && h.account === 'mirae') { openExit(id); return; }   // 트레이딩 포지션은 R 통계를 위해 청산 기록 창 사용
   openDlg(`<h3>매도 기록 — ${esc(h.name)}</h3>
     <div class="note" style="margin:0 0 .75rem">${ACCT[h.account].name} · 보유 ${h.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주, 평균 ${fmtCash(h.avg, h.account)}</div>
     <label>매도일<input id="sDate" type="date" value="${todayStr()}"></label>
