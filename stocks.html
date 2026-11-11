@@ -421,7 +421,7 @@
       <div class="card">
         <div class="card-label">투자 비중 규칙 (NH · 삼성 · 신한)</div>
         <div class="rule-grid">
-          <div class="field"><label>기본 목표 비중 (%)</label><input id="rWeight" type="number" step="0.5" min="0" inputmode="decimal" onchange="setRule('weightPct', this.value)"></div>
+          <div class="field"><label>기본 목표 비중 (%) · 전체 자산 대비</label><input id="rWeight" type="number" step="0.5" min="0" inputmode="decimal" onchange="setRule('weightPct', this.value)"></div>
         </div>
         <div class="note" id="ivRuleInfo"></div>
       </div>
@@ -1103,6 +1103,9 @@ function accountBase(acct) {                                     // 계좌 평�
   const { per } = compute(), krw = per[acct].value + per[acct].cash;
   return ACCT[acct].cur === 'USD' ? krw / state.rate : krw;
 }
+function totalAssetsKRW() { const { total } = compute(); return total.value + total.cash; }   // 전체 자산: 4개 계좌 평가금액 + 예수금
+const fromKRW = (krw, acct) => ACCT[acct].cur === 'USD' ? krw / state.rate : krw;
+function weightBase(acct) { return fromKRW(totalAssetsKRW(), acct); }                             // 목표 비중 기준: 전체 자산(계좌 통화로 환산)
 const stageList = p => (p.stages && p.stages.length > 1) ? p.stages : [{ price: p.entry, pct: 100, done: p.status === 'entered' }];
 const nextStage = p => Math.max(stageList(p).findIndex(s => !s.done), 0);
 const effEntry = p => (p.stages && p.stages.length > 1) ? p.stages.reduce((s, x) => s + x.price * x.pct / 100, 0) : p.entry;
@@ -1116,6 +1119,7 @@ function calcPlan(p, base) {
   if (hasStop && !(p.stop < e)) return { valid: false, reason: '손절가는 매수가보다 낮아야 해요.' };
   if (hasT1 && !(p.t1 > e)) return { valid: false, reason: '목표가는 매수가보다 높아야 해요.' };
   const risk = hasStop ? e - p.stop : 0, mode = planMode(p), tr = state.trade;
+  const inv = kindOf(p.account) === 'invest', basis = inv ? weightBase(p.account) : base, basisName = inv ? '전체 자산' : '계좌 기준 금액';
   const hasT2 = hasT1 && p.t2 > p.t1, w1 = hasT2 ? Math.min(Math.max((p.t1pct || 50) / 100, 0.01), 0.99) : 1;
   const avgT = hasT1 ? p.t1 * w1 + (hasT2 ? p.t2 * (1 - w1) : 0) : null;
   let qty = 0, capped = false, label = '', riskAmt = 0;
@@ -1125,7 +1129,7 @@ function calcPlan(p, base) {
     const maxQty = Math.floor(base * tr.maxPosPct / 100 / e); capped = qty > maxQty; qty = Math.max(Math.min(qty, maxQty), 0);
     label = `1회 최대 손실 ${tr.riskPct}%`;
   } else if (mode === 'weight') {
-    const w = p.size > 0 ? p.size : tr.weightPct; qty = Math.floor(base * w / 100 / e); label = `계좌 대비 ${w}% 목표`;
+    const w = p.size > 0 ? p.size : tr.weightPct; qty = Math.floor(basis * w / 100 / e); label = `${inv ? '전체 자산' : '계좌'} 대비 ${w}% 목표`;
   } else {
     if (!(p.size > 0)) return { valid: false, reason: '투자 예산을 입력해 주세요.' };
     qty = Math.floor(p.size / e); label = '투자 예산';
@@ -1134,7 +1138,7 @@ function calcPlan(p, base) {
   return { valid: true, mode, label, hasStop, hasT1, hasT2, w1, avgT, risk, entry: e,
     rr: hasStop && hasT1 ? (avgT - e) / risk : null, rr1: hasStop && hasT1 ? (p.t1 - e) / risk : null, rr2: hasStop && hasT2 ? (p.t2 - e) / risk : null,
     stopPct: hasStop ? risk / e * 100 : null, t1Pct: hasT1 ? (p.t1 - e) / e * 100 : null, t2Pct: hasT2 ? (p.t2 - e) / e * 100 : null,
-    qty, capped, cost: qty * e, weight: base ? qty * e / base * 100 : 0,
+    qty, capped, cost: qty * e, weight: basis ? qty * e / basis * 100 : 0, basisName,
     loss: hasStop ? qty * risk : null, gain: hasT1 ? qty * (avgT - e) : null, riskAmt, base };
 }
 function planFlag(p) {                                           // 현재가 대비 상태 표시 (참고용)
@@ -1179,7 +1183,7 @@ function planFormHtml(kind) {
     grid = f('Acct', '계좌', `<select id="${pre}Acct" onchange="${fn}">${INVEST_ACCTS.map(a => `<option value="${a.id}">${a.name}${a.cur === 'USD' ? ' (USD)' : ''}</option>`).join('')}</select>`) + common +
       f('Setup', '유형', setups) + f('Entry', '매수가 (1차)', n('Entry')) + f('S2', '2차 매수가 (분할 매수 시)', n('S2', '비우면 한 번에 매수')) + f('S3', '3차 매수가 (선택)', n('S3')) +
       f('Split', '분할 매수 비율 (%)', t('Split', '예: 50, 30, 20 (비우면 균등)', `oninput="${fn}"`)) +
-      f('Mode', '수량 기준', `<select id="${pre}Mode" onchange="${fn}"><option value="auto">자동 (계좌 대비 목표 비중)</option><option value="weight">계좌 대비 비중 (%)</option><option value="budget">투자 예산</option></select>`) +
+      f('Mode', '수량 기준', `<select id="${pre}Mode" onchange="${fn}"><option value="auto">자동 (전체 자산 대비 목표 비중)</option><option value="weight">전체 자산 대비 비중 (%)</option><option value="budget">투자 예산</option></select>`) +
       f('Size', '비중(%) 또는 예산 (원/$)', n('Size', '비우면 기본 목표 비중')) +
       f('Note', '투자 근거 · 메모', t('Note', '예: 실적 개선, 저평가 구간, 배당 매력'), 'wide') +
       `<details class="wide" style="grid-column:1/-1"><summary style="font-size:13px;cursor:pointer;color:var(--text-secondary)">손절가·목표가 (선택)</summary><div class="plan-grid" style="margin-top:8px">` +
@@ -1213,7 +1217,7 @@ function updatePlanPreview(kind) {
   if (c.t1Pct !== null) parts.push(`목표폭 +${c.t1Pct.toFixed(1)}%${c.hasT2 ? ` / +${c.t2Pct.toFixed(1)}%` : ''}${c.rr1 !== null && c.hasT2 ? ` (1차 ${c.rr1.toFixed(2)}R, 2차 ${c.rr2.toFixed(2)}R)` : ''}`);
   const sq = p.stages.length > 1 ? stageQtys(c.qty, p.stages) : null;
   el.innerHTML = (parts.length ? parts.join(' · ') + '<br>' : '') +
-    `${a.name} · ${c.label} → 권장 수량 <b>${c.qty.toLocaleString('ko-KR')}주</b> · 투입 ${f(c.cost)} (계좌 기준 금액의 ${c.weight.toFixed(1)}%)${c.capped ? ' · 최대 비중으로 제한됨' : ''}` +
+    `${a.name} · ${c.label} → 권장 수량 <b>${c.qty.toLocaleString('ko-KR')}주</b> · 투입 ${f(c.cost)} (${c.basisName}의 ${c.weight.toFixed(1)}%)${c.capped ? ' · 최대 비중으로 제한됨' : ''}` +
     (c.loss !== null ? ` · 손절 시 -${f(c.loss)}` : '') +
     (sq ? `<br>분할 매수: ${p.stages.map((s, i) => `${i + 1}차 ${f(s.price)} (${Math.round(s.pct)}% · ${sq[i]}주)`).join(' → ')} · 평균 ${f(c.entry)}` : '');
 }
@@ -1422,7 +1426,7 @@ function renderPlans(kind) {
       ? `기준 금액 <b>${won(mb)}</b>${t.base > 0 ? ' (직접 입력)' : ' (미래에셋 평가금액 + 예수금)'} · 1회 허용 손실 <b>${won(mb * t.riskPct / 100)}</b> · 종목당 최대 투입 ${won(mb * t.maxPosPct / 100)}`
       : '미래에셋 계좌에 종목이나 예수금이 없어서 기준 금액을 계산할 수 없어요. 위 "기준 금액"에 직접 입력해 주세요.';
   } else {
-    document.getElementById('ivRuleInfo').innerHTML = '수량 기준이 "자동"이면 각 계좌(평가금액 + 예수금)의 기본 목표 비중만큼 사도록 계산하고, 매수가 끝나면 그 비중이 종목의 목표 비중이 돼요.';
+    document.getElementById('ivRuleInfo').innerHTML = `목표 비중은 <b>전체 자산(4개 계좌의 평가금액 + 예수금) ${fmtKRW(totalAssetsKRW())}</b> 대비 비중이에요. 수량 기준이 "자동"이면 기본 목표 비중만큼 사도록 계산하고, 매수가 끝나면 그 비중이 종목의 목표 비중이 돼요.`;
   }
   updatePlanPreview(kind);
   const mine = state.plans.filter(p => ACCT[p.account] && kindOf(p.account) === kind);
@@ -1451,7 +1455,7 @@ function renderPlans(kind) {
         <div><span>목표가${c.hasT2 ? ' 1차' : ''}</span><b class="${p.t1 > 0 ? 'up' : ''}">${p.t1 > 0 ? fm(p.t1) : '-'}</b>${c.valid && c.t1Pct !== null ? `<small class="up">+${c.t1Pct.toFixed(1)}%${c.rr1 !== null ? ` · ${c.rr1.toFixed(1)}R` : ''}</small>` : ''}</div>
         <div><span>${c.hasT2 ? '목표가 2차' : '청산'}</span><b class="${c.hasT2 ? 'up' : ''}">${c.hasT2 ? fm(p.t2) : (p.t1 > 0 ? '한 번에' : '-')}</b>${c.hasT2 ? `<small class="up">+${c.t2Pct.toFixed(1)}%${c.rr2 !== null ? ` · ${c.rr2.toFixed(1)}R` : ''}</small><small>${Math.round(c.w1 * 100)}% / ${Math.round((1 - c.w1) * 100)}% 분할</small>` : ''}</div>
       </div>
-      ${c.valid ? `<div class="pc-line">권장 <b>${c.qty.toLocaleString('ko-KR')}주</b> · 투입 ${fm(c.cost)} (계좌의 ${c.weight.toFixed(1)}%) <span class="pill">${c.label}</span>${c.capped ? ' <span class="pill warn">최대 비중 제한</span>' : ''}
+      ${c.valid ? `<div class="pc-line">권장 <b>${c.qty.toLocaleString('ko-KR')}주</b> · 투입 ${fm(c.cost)} (${c.basisName}의 ${c.weight.toFixed(1)}%) <span class="pill">${c.label}</span>${c.capped ? ' <span class="pill warn">최대 비중 제한</span>' : ''}
         ${c.loss !== null || c.gain !== null ? `<br>${c.loss !== null ? `손절 시 <span class="down">-${fm(c.loss)}</span>` : ''}${c.loss !== null && c.gain !== null ? ' · ' : ''}${c.gain !== null ? `목표 달성 시 <span class="up">+${fm(c.gain)}</span>` : ''}` : ''}</div>` : `<div class="pc-line"><span class="down">${esc(c.reason || '')}</span></div>`}
       ${staged ? `<div class="pc-line">분할 매수 ${stages.map((s, i) => `<span class="pill ${s.done ? 'good' : (i === ni && p.status !== 'entered' ? 'ok' : '')}">${i + 1}차 ${fm(s.price)} · ${Math.round(s.pct)}%${sq ? ` · ${sq[i]}주` : ''}${s.done ? ' ✔' : ''}</span>`).join(' ')}</div>` : ''}
       <div class="pc-line">현재가 <input class="cur" style="width:96px;padding:4px 6px;font-size:13px" type="number" step="any" value="${p.cur || ''}" placeholder="-" onchange="setPlanCur('${p.id}', this.value)" aria-label="${esc(p.name)} 현재가">
@@ -1496,7 +1500,7 @@ function renderHold() {                                           // 투자: NH�
   const accts = INVEST_ACCTS.filter(a => ivAcct === 'all' || a.id === ivAcct);
   document.getElementById('ivHoldTools').innerHTML = [['all', '전체'], ...INVEST_ACCTS.map(a => [a.id, a.name])]
     .map(([id, name]) => `<button class="tab ${ivAcct === id ? 'active' : ''}" onclick="setIvAcct('${id}')">${name}</button>`).join('');
-  document.getElementById('ivSummary').innerHTML = `<div class="card"><div class="card-label">계좌별 현황 (평가금액 + 예수금)</div>` + accts.map(a => {
+  document.getElementById('ivSummary').innerHTML = `<div class="card"><div class="card-label">전체 자산 ${fmtKRW(totalAssetsKRW())} · 계좌별 현황 (평가금액 + 예수금)</div>` + accts.map(a => {
     const p = per[a.id], base = accountBase(a.id), cash = Number(state.cash[a.id]) || 0, stock = base - cash;
     return `<div class="cash-row"><span><span class="dot" style="--c:${a.color}"></span>${a.name}</span>
       <span class="sub">주식 ${fmtCash(stock, a.id)} + 예수금 ${fmtCash(cash, a.id)}</span>
@@ -1504,13 +1508,13 @@ function renderHold() {                                           // 투자: NH�
   const rows = state.holdings.filter(h => accts.some(a => a.id === h.account)).sort((x, y) => toKRW(y.qty * y.cur, y.account) - toKRW(x.qty * x.cur, x.account));
   if (!rows.length) { document.getElementById('ivList').innerHTML = '<div class="card"><div class="empty">투자 계좌(NH·삼성·신한)에 보유 종목이 없어요.<br>관심 종목에서 "매수 완료"를 누르거나 보유 종목 탭에서 추가해 주세요.</div></div>'; return; }
   document.getElementById('ivList').innerHTML = '<div class="pcards">' + rows.map(h => {
-    const a = ACCT[h.account], fm = v => fmtCash(v, h.account), base = accountBase(h.account);
+    const a = ACCT[h.account], fm = v => fmtCash(v, h.account), T = totalAssetsKRW();
     const val = h.qty * h.cur, pnl = (h.cur - h.avg) * h.qty, ret = h.avg ? (h.cur - h.avg) / h.avg * 100 : 0;
-    const curW = base ? val / base * 100 : 0, tgt = h.targetPct > 0 ? h.targetPct : 0, diff = tgt - curW;
+    const curW = T ? toKRW(val, h.account) / T * 100 : 0, tgt = h.targetPct > 0 ? h.targetPct : 0, diff = tgt - curW;
     let status = '<span class="pill">목표 비중을 입력하면 비교해 줘요</span>', gap = '';
     if (tgt > 0) {
-      if (diff > 1) { const amt = diff / 100 * base; status = `<span class="pill warn">목표까지 +${diff.toFixed(1)}%p 부족</span>`; gap = `약 ${fm(amt)} · ${h.cur > 0 ? Math.floor(amt / h.cur) : 0}주 더 매수할 수 있어요`; }
-      else if (diff < -1) { const amt = -diff / 100 * base; status = `<span class="pill ok">목표 ${(-diff).toFixed(1)}%p 초과</span>`; gap = `약 ${fm(amt)} · ${h.cur > 0 ? Math.floor(amt / h.cur) : 0}주를 줄이면 목표 비중이에요`; }
+      if (diff > 1) { const amt = fromKRW(diff / 100 * T, h.account); status = `<span class="pill warn">목표까지 +${diff.toFixed(1)}%p 부족</span>`; gap = `약 ${fm(amt)} · ${h.cur > 0 ? Math.floor(amt / h.cur) : 0}주 더 매수할 수 있어요`; }
+      else if (diff < -1) { const amt = fromKRW(-diff / 100 * T, h.account); status = `<span class="pill ok">목표 ${(-diff).toFixed(1)}%p 초과</span>`; gap = `약 ${fm(amt)} · ${h.cur > 0 ? Math.floor(amt / h.cur) : 0}주를 줄이면 목표 비중이에요`; }
       else status = '<span class="pill good">목표 비중 근접</span>';
     }
     return `<div class="pcard">
@@ -1521,10 +1525,10 @@ function renderHold() {                                           // 투자: NH�
         <div><span>수량</span><b>${h.qty.toLocaleString('ko-KR', { maximumFractionDigits: 4 })}주</b></div>
         <div><span>평가손익</span><b class="${cls(pnl)}">${sgn(pnl, h.account)}</b></div>
       </div>
-      <div class="pc-line">현재 비중 <b>${curW.toFixed(1)}%</b>${tgt > 0 ? ` / 목표 <b>${tgt}%</b>` : ''} ${status}</div>
+      <div class="pc-line">전체 자산 대비 현재 <b>${curW.toFixed(1)}%</b>${tgt > 0 ? ` / 목표 <b>${tgt}%</b>` : ''} ${status}</div>
       ${tgt > 0 ? `<div class="wbar"><i style="width:${Math.min(curW / Math.max(tgt, curW, 1) * 100, 100)}%"></i><b style="left:${Math.min(tgt / Math.max(tgt, curW, 1) * 100, 100)}%"></b></div>` : ''}
       ${gap ? `<div class="pc-line">${gap}</div>` : ''}
-      <div class="hc-grid"><label>목표 비중 (%)<input type="number" step="0.5" min="0" inputmode="decimal" value="${tgt || ''}" placeholder="예: 5" onchange="setTarget('${h.id}', this.value)"></label></div>
+      <div class="hc-grid"><label>목표 비중 (%, 전체 자산 대비)<input type="number" step="0.5" min="0" inputmode="decimal" value="${tgt || ''}" placeholder="예: 5" onchange="setTarget('${h.id}', this.value)"></label></div>
       <div class="pc-actions"><button class="mini buy" onclick="openBuy('${h.id}')">매수 기록</button><button class="mini sell" onclick="openSell('${h.id}')">매도 기록</button></div></div>`;
   }).join('') + '</div>';
 }
