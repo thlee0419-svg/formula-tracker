@@ -46,6 +46,7 @@
   .date-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
   .date-row input { width:68px; text-align:center; padding:12px 4px; }
   .date-row span { color:var(--text2); }
+  .date-row[hidden] { display:none; }
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:10; }
   .overlay[hidden] { display:none; }
   .sheet { max-height:92vh; overflow-y:auto; background:var(--surface); width:100%; max-width:680px; border-radius:16px 16px 0 0; padding:1.2rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
@@ -66,6 +67,7 @@
   .item { display:flex; align-items:center; gap:10px; padding:12px 0; border-top:1px solid var(--border); }
   .item:first-child { border-top:none; }
   .info { flex:1; min-width:0; cursor:pointer; }
+  .mv { display:inline-block; margin-top:6px; border:1px solid var(--border); background:var(--bg); color:var(--accent); border-radius:999px; font-size:12px; padding:3px 10px; cursor:pointer; white-space:nowrap; }
   .info .name .pen { font-size:12px; opacity:.45; margin-left:4px; }
   .danger { background:none; border:1px solid var(--red); color:var(--red); border-radius:10px; font-size:15px; padding:10px 14px; cursor:pointer; }
   .name { font-size:17px; font-weight:500; }
@@ -150,6 +152,28 @@
 
   <div class="card" id="list"></div>
   <div class="status" id="status"></div>
+</div>
+
+<!-- 냉장/냉동 이동 -->
+<div class="overlay" id="moveModal" hidden>
+  <div class="sheet">
+    <h3 id="moveTitle">옮기기</h3>
+    <div class="stat-sub" id="moveSub"></div>
+    <div class="lbl">날짜는 어떻게 할까요?</div>
+    <div class="seg" id="moveSeg" style="margin-top:4px;flex-direction:column">
+      <button type="button" data-v="keep" class="on" style="text-align:left;padding:12px">날짜 그대로</button>
+      <button type="button" data-v="reset" style="text-align:left;padding:12px">오늘부터 일수 다시 세기 <span style="color:var(--text3);font-size:13px">(유통기한 없앰)</span></button>
+      <button type="button" data-v="new" style="text-align:left;padding:12px">유통기한 새로 입력</button>
+    </div>
+    <div class="date-row" id="moveDate" hidden>
+      <input id="mvYear" type="number" inputmode="numeric" placeholder="연도" style="width:92px"><span>년</span>
+      <input id="mvMon" type="number" inputmode="numeric" placeholder="월"><span>월</span>
+      <input id="mvDay" type="number" inputmode="numeric" placeholder="일"><span>일</span>
+    </div>
+    <div class="preview" id="moveErr" style="color:var(--red)"></div>
+    <button class="primary" id="moveOk" style="width:100%">옮기기</button>
+    <div class="row" style="justify-content:flex-end;margin-top:0"><button class="ghost" id="moveCancel">취소</button></div>
+  </div>
 </div>
 
 <!-- 재료 수정 / 삭제 -->
@@ -286,7 +310,8 @@ function render() {
     const d = ddayInfo(i);
     const meta = [i.loc, i.qty, i.by && `${i.by} 등록`].filter(Boolean).map(esc).join(' · ');
     return `<div class="item${d.cls === 'red' ? ' red' : ''}">
-      <div class="info" data-edit="${esc(i.id)}"><div class="name">${esc(i.name)}<span class="pen">✏️</span></div><div class="meta">${meta}</div></div>
+      <div class="info" data-edit="${esc(i.id)}"><div class="name">${esc(i.name)}<span class="pen">✏️</span></div><div class="meta">${meta}</div>
+        <button class="mv" type="button" data-move="${esc(i.id)}">${i.loc === '냉동' ? '🧊 냉장으로' : '❄️ 냉동으로'}</button></div>
       <span class="dday ${d.cls}">${d.text}</span>
       <span class="acts"><button data-id="${esc(i.id)}" data-s="먹음">먹었어요</button><button data-id="${esc(i.id)}" data-s="버림">버렸어요</button></span>
     </div>`;
@@ -431,7 +456,40 @@ $('editDelete').onclick = async () => {
 $('editCancel').onclick = closeEdit;
 $('editModal').addEventListener('click', e => { if (e.target === $('editModal')) closeEdit(); });
 
+/* ---------- 냉장 ⇄ 냉동 이동 ---------- */
+let moveId = null, moveTo = '냉동', moveMode = 'keep';
+function openMove(id) {
+  const it = items.find(x => x.id === id); if (!it) return;
+  moveId = id; moveTo = it.loc === '냉동' ? '냉장' : '냉동'; moveMode = 'keep'; setSeg('moveSeg', 'keep');
+  $('moveTitle').textContent = `${it.name}, ${moveTo}실로 옮겨요`;
+  $('moveSub').textContent = it.expiry ? `지금 유통기한: ${it.expiry}` : `지금: ${it.added || ''}부터 ${ageDays(it) ?? '?'}일째`;
+  fillDate('mv', it.expiry); $('moveDate').hidden = true; $('moveErr').textContent = '';
+  $('moveModal').hidden = false;
+}
+function closeMove() { $('moveModal').hidden = true; moveId = null; }
+$('moveSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  moveMode = b.dataset.v; setSeg('moveSeg', moveMode); $('moveDate').hidden = moveMode !== 'new';
+});
+$('moveOk').onclick = async () => {
+  const it = items.find(x => x.id === moveId); if (!it) return closeMove();
+  const patch = { loc: moveTo };
+  if (moveMode === 'reset') Object.assign(patch, { expiry: '', added: fmt(today()) });
+  if (moveMode === 'new') {
+    const r = readDate('mv', 'expiry');
+    if (r.err) { $('moveErr').textContent = '⚠️ ' + r.err; return; }
+    patch.expiry = r.date;
+    if (!r.date) patch.added = fmt(today()); // 유통기한을 비우면 오늘부터 일수를 센다
+  }
+  Object.assign(it, patch); store.set('fridgeItems', items); render(); closeMove();
+  await send({ action: 'update', id: it.id, name: it.name, qty: it.qty, loc: it.loc, expiry: it.expiry, added: it.added });
+};
+$('moveCancel').onclick = closeMove;
+$('moveModal').addEventListener('click', e => { if (e.target === $('moveModal')) closeMove(); });
+
 $('list').addEventListener('click', e => {
+  const mv = e.target.closest('button[data-move]');
+  if (mv) { openMove(mv.dataset.move); return; }
   const info = e.target.closest('.info[data-edit]');
   if (info) { openEdit(info.dataset.edit); return; }
   const b = e.target.closest('button[data-id]'); if (!b) return;
