@@ -74,7 +74,7 @@
   .mid b { display:block; font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .mid small { display:block; font-size:12px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .amt { font-weight:700; font-size:15px; white-space:nowrap; }
-  .amt.in { color:var(--in); } .amt.out { color:var(--out); }
+  .amt.in { color:var(--in); } .amt.out { color:var(--out); } .amt.xfer { color:var(--text2); }
   .rec-badge { font-size:11px; background:var(--muted-bg); color:var(--text2); border-radius:6px; padding:0 5px; margin-left:4px; }
 
   .seg { display:flex; background:var(--muted-bg); border-radius:12px; padding:3px; margin-bottom:.8rem; }
@@ -225,7 +225,8 @@ function saveLocal() { lsSet(KEY, JSON.stringify(S)); }
 function save() { S.updatedAt = Date.now(); saveLocal(); lsSet(LS_DIRTY, '1'); schedulePush(); }
 function touch(o) { o.u = Date.now(); return o; }
 
-const payNet = id => live(S.tx).filter(t => t.pay === id).reduce((x, t) => x + (t.type === 'in' ? t.amount : -t.amount), 0);
+// 이체(xfer): 보내는 계좌(pay)에서 빠지고 받는 계좌(to)로 들어감. 수입·지출 합계에는 포함되지 않음
+const payNet = id => live(S.tx).reduce((x, t) => t.type === 'xfer' ? x + (t.to === id ? t.amount : 0) - (t.pay === id ? t.amount : 0) : t.pay !== id ? x : x + (t.type === 'in' ? t.amount : -t.amount), 0);
 const payBalance = p => p.init + payNet(p.id);   // 시작 잔액 + 기록된 수입 - 지출
 const catById = id => S.cats.find(c => c.id === id);
 const payById = id => S.pays.find(p => p.id === id);
@@ -239,7 +240,7 @@ const monthTx = ym => live(S.tx).filter(t => monthOf(t.date) === ym);
 function sums(ym) {
   const r = { in: 0, out: 0, cat: {}, tag: {}, pay: {} };
   monthTx(ym).forEach(t => {
-    r[t.type] += t.amount;
+    if (t.type === 'in' || t.type === 'out') r[t.type] += t.amount;
     if (t.type === 'out') {
       r.cat[t.cat] = (r.cat[t.cat] || 0) + t.amount;
       r.pay[t.pay] = (r.pay[t.pay] || 0) + t.amount;
@@ -272,7 +273,7 @@ function genRecurring() {
       if (have.has(id)) continue;
       const date = `${ym}-${pad(Math.min(r.day, daysIn(ym)))}`;
       if (date > td) continue;
-      S.tx.push({ id, type: r.type, amount: r.amount, date, cat: r.cat, pay: r.pay, memo: r.memo, tags: r.tags.slice(), rid: r.id, u: Date.now() });
+      S.tx.push({ id, type: r.type, amount: r.amount, date, cat: r.cat, pay: r.pay, to: r.to, memo: r.memo, tags: r.tags.slice(), rid: r.id, u: Date.now() });
       have.add(id); changed = true;
     }
   });
@@ -303,7 +304,7 @@ function homeHTML() {
   ${al.map(a => `<div class="alert ${a.st}">${a.st === 'over' ? '🚨' : '⚠️'} ${esc(a.msg)}</div>`).join('')}
   <div class="filters"><input type="search" id="q" placeholder="메모·카테고리·태그 검색" value="${esc(ui.q)}"><button class="tgl ${ui.fopen || ui.ft || ui.fc || ui.fp || ui.fg ? 'on' : ''}" data-act="ftoggle">필터</button></div>
   <div class="fsel ${ui.fopen ? 'show' : ''}">
-    <select data-filter="ft"><option value="">수입+지출</option><option value="out" ${ui.ft === 'out' ? 'selected' : ''}>지출만</option><option value="in" ${ui.ft === 'in' ? 'selected' : ''}>수입만</option></select>
+    <select data-filter="ft"><option value="">수입+지출</option><option value="out" ${ui.ft === 'out' ? 'selected' : ''}>지출만</option><option value="in" ${ui.ft === 'in' ? 'selected' : ''}>수입만</option><option value="xfer" ${ui.ft === 'xfer' ? 'selected' : ''}>이체만</option></select>
     <select data-filter="fc"><option value="">모든 카테고리</option>${live(S.cats).map(c => `<option value="${c.id}" ${ui.fc === c.id ? 'selected' : ''}>${c.type === 'in' ? '[수입] ' : ''}${esc(c.emoji + ' ' + c.name)}</option>`).join('')}</select>
     <select data-filter="fp"><option value="">모든 결제수단</option>${live(S.pays).map(p => `<option value="${p.id}" ${ui.fp === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
     <select data-filter="fg"><option value="">모든 태그</option>${tags.map(g => `<option value="${esc(g)}" ${ui.fg === g ? 'selected' : ''}>#${esc(g)}</option>`).join('')}</select>
@@ -318,7 +319,7 @@ function renderList() {
     if (ui.fc && t.cat !== ui.fc) return false;
     if (ui.fp && t.pay !== ui.fp) return false;
     if (ui.fg && !t.tags.includes(ui.fg)) return false;
-    if (q && !(`${t.memo} ${catName(t.cat)} ${payName(t.pay)} ${t.tags.join(' ')}`.toLowerCase().includes(q))) return false;
+    if (q && !(`${t.memo} ${t.type === 'xfer' ? '이체 ' + payName(t.to) : catName(t.cat)} ${payName(t.pay)} ${t.tags.join(' ')}`.toLowerCase().includes(q))) return false;
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date) || (b.u || 0) - (a.u || 0));
   const filtered = q || ui.ft || ui.fc || ui.fp || ui.fg;
@@ -328,12 +329,12 @@ function renderList() {
   const byDate = {};
   items.forEach(t => (byDate[t.date] = byDate[t.date] || []).push(t));
   Object.keys(byDate).sort().reverse().forEach(d => {
-    const arr = byDate[d], net = arr.reduce((x, t) => x + (t.type === 'in' ? t.amount : -t.amount), 0), dt = new Date(d + 'T00:00:00');
+    const arr = byDate[d], net = arr.reduce((x, t) => x + (t.type === 'xfer' ? 0 : t.type === 'in' ? t.amount : -t.amount), 0), dt = new Date(d + 'T00:00:00');
     h += `<div class="day"><span>${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]})</span><span>${net < 0 ? '-' : net > 0 ? '+' : ''}${won(Math.abs(net))}</span></div><div class="group">`;
     arr.forEach(t => {
-      h += `<button class="row" data-act="edit" data-id="${t.id}"><span class="ico" style="background:${catColor(t.cat)}22">${esc(catIcon(t.cat))}</span>
-      <span class="mid"><b>${esc(t.memo || catName(t.cat))}${t.rid ? '<span class="rec-badge">반복</span>' : ''}</b><small>${esc(catName(t.cat))} · ${esc(payName(t.pay))}${t.tags.length ? ' · ' + t.tags.map(g => '#' + esc(g)).join(' ') : ''}</small></span>
-      <span class="amt ${t.type}">${t.type === 'in' ? '+' : '-'}${won(t.amount)}</span></button>`;
+      h += `<button class="row" data-act="edit" data-id="${t.id}"><span class="ico" style="background:${t.type === 'xfer' ? '#6b7280' : catColor(t.cat)}22">${t.type === 'xfer' ? '🔁' : esc(catIcon(t.cat))}</span>
+      <span class="mid"><b>${esc(t.memo || (t.type === 'xfer' ? '이체' : catName(t.cat)))}${t.rid ? '<span class="rec-badge">반복</span>' : ''}</b><small>${t.type === 'xfer' ? esc(payName(t.pay)) + ' → ' + esc(payName(t.to)) : esc(catName(t.cat)) + ' · ' + esc(payName(t.pay))}${t.tags.length ? ' · ' + t.tags.map(g => '#' + esc(g)).join(' ') : ''}</small></span>
+      <span class="amt ${t.type}">${t.type === 'xfer' ? '' : t.type === 'in' ? '+' : '-'}${won(t.amount)}</span></button>`;
     });
     h += '</div>';
   });
@@ -390,7 +391,7 @@ function manageHTML() {
   const item = (icon, color, title, sub, act, id, extra) => `<button class="list-item" data-act="${act}" data-id="${id}"><span class="ico" style="background:${color}22">${icon}</span><span class="mid"><b>${title}</b><small>${sub}</small></span>${extra || ''}</button>`;
   const kinds = { cash: '현금', card: '카드', bank: '계좌' };
   return `<div class="card"><h2>🔁 반복 거래 (고정 수입·지출)</h2>
-    ${live(S.rec).map(r => item(esc(catIcon(r.cat)), catColor(r.cat), esc(r.memo || catName(r.cat)), `매월 ${r.day}일 · ${esc(payName(r.pay))} · ${r.start.replace('-', '년 ')}월부터`, 'editRec', r.id, `<span class="amt ${r.type}">${r.type === 'in' ? '+' : '-'}${won(r.amount)}</span>`)).join('') || '<div class="empty">월세, 통신비, 월급처럼 매달 반복되는 내역을 등록하면<br>해당 날짜에 자동으로 기록돼요</div>'}
+    ${live(S.rec).map(r => item(r.type === 'xfer' ? '🔁' : esc(catIcon(r.cat)), r.type === 'xfer' ? '#6b7280' : catColor(r.cat), esc(r.memo || (r.type === 'xfer' ? '이체' : catName(r.cat))), `매월 ${r.day}일 · ${r.type === 'xfer' ? esc(payName(r.pay)) + ' → ' + esc(payName(r.to)) : esc(payName(r.pay))} · ${r.start.replace('-', '년 ')}월부터`, 'editRec', r.id, `<span class="amt ${r.type}">${r.type === 'xfer' ? '' : r.type === 'in' ? '+' : '-'}${won(r.amount)}</span>`)).join('') || '<div class="empty">월세, 통신비, 월급처럼 매달 반복되는 내역을 등록하면<br>해당 날짜에 자동으로 기록돼요</div>'}
     <button class="addbtn" data-act="addRec">＋ 반복 거래 추가</button></div>
   <div class="card"><h2>🏷️ 카테고리</h2><div class="muted" style="margin-bottom:.3rem">지출</div>
     ${catsOf('out').map(c => item(esc(c.emoji), PALETTE[c.color % PALETTE.length], esc(c.name), '', 'editCat', c.id)).join('')}<button class="addbtn" data-act="addCat" data-t="out">＋ 지출 카테고리 추가</button>
@@ -410,7 +411,7 @@ function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add
 
 function newDraft(mode, t) {
   const first = type => (catsOf(type)[0] || {}).id || '';
-  const d = t ? { ...t, tags: t.tags.slice() } : { type: 'out', amount: 0, date: ui.ym === monthOf(todayStr()) ? todayStr() : ui.ym + '-01', day: new Date().getDate(), cat: first('out'), pay: (live(S.pays)[0] || {}).id || '', memo: '', tags: [] };
+  const d = t ? { ...t, tags: t.tags.slice() } : { type: 'out', amount: 0, date: ui.ym === monthOf(todayStr()) ? todayStr() : ui.ym + '-01', day: new Date().getDate(), cat: first('out'), pay: (live(S.pays)[0] || {}).id || '', to: '', memo: '', tags: [] };
   d.mode = mode; return d;
 }
 function syncForm() {
@@ -419,24 +420,27 @@ function syncForm() {
   if ($('f-date')) f.date = $('f-date').value || f.date;
   if ($('f-day')) f.day = +$('f-day').value;
   if ($('f-pay')) f.pay = $('f-pay').value;
+  if ($('f-to')) f.to = $('f-to').value;
   if ($('f-memo')) f.memo = $('f-memo').value.trim();
   if ($('f-tags')) f.tags = parseTags($('f-tags').value);
 }
 const parseTags = s => [...new Set(s.split(/[\s,#]+/).filter(Boolean))];
 function txFormHTML() {
   const f = ui.f, isRec = f.mode === 'rec', editing = !!f.id;
-  const cats = catsOf(f.type), pop = allTags().slice(0, 10);
+  const cats = catsOf(f.type), pop = allTags().slice(0, 10), isX = f.type === 'xfer';
+  const payOpts = sel => live(S.pays).map(p => `<option value="${p.id}" ${sel === p.id ? 'selected' : ''}>${esc(payIcon(p) + ' ' + p.name)}</option>`).join('');
   return `<h3>${isRec ? (editing ? '반복 거래 수정' : '반복 거래 추가') : (editing ? '내역 수정' : '내역 추가')}</h3>
-  <div class="seg"><button data-act="ftype" data-k="out" class="${f.type === 'out' ? 'on' : ''}">지출</button><button data-act="ftype" data-k="in" class="${f.type === 'in' ? 'on' : ''}">수입</button></div>
+  <div class="seg"><button data-act="ftype" data-k="out" class="${f.type === 'out' ? 'on' : ''}">지출</button><button data-act="ftype" data-k="in" class="${f.type === 'in' ? 'on' : ''}">수입</button><button data-act="ftype" data-k="xfer" class="${isX ? 'on' : ''}">이체</button></div>
   <label class="l" for="f-amount">금액</label>
   <input class="inp amtinp" id="f-amount" type="text" inputmode="numeric" placeholder="0" value="${f.amount ? f.amount.toLocaleString('ko-KR') : ''}"><div class="amtview" id="f-amtview">${f.amount ? won(f.amount) : ''}</div>
   ${isRec ? `<label class="l" for="f-day">매월 몇 일</label><select class="inp" id="f-day">${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${f.day === i + 1 ? 'selected' : ''}>${i + 1}일${i + 1 > 28 ? ' (짧은 달은 말일)' : ''}</option>`).join('')}</select>`
     : `<label class="l" for="f-date">날짜</label><input class="inp" id="f-date" type="date" value="${f.date}">`}
-  <span class="l">카테고리</span><div class="chips">${cats.map(c => `<button class="chip ${f.cat === c.id ? 'on' : ''}" data-act="fcat" data-id="${c.id}">${esc(c.emoji + ' ' + c.name)}</button>`).join('')}</div>
-  <label class="l" for="f-pay">결제수단</label><select class="inp" id="f-pay">${live(S.pays).map(p => `<option value="${p.id}" ${f.pay === p.id ? 'selected' : ''}>${esc(payIcon(p) + ' ' + p.name)}</option>`).join('')}</select>
-  <label class="l" for="f-memo">메모</label><input class="inp" id="f-memo" type="text" maxlength="60" placeholder="예: 점심, 마트" value="${esc(f.memo)}">
-  <label class="l" for="f-tags">태그</label><input class="inp" id="f-tags" type="text" placeholder="예: 여행 회식 (띄어쓰기로 구분)" value="${esc(f.tags.join(' '))}">
-  ${pop.length ? `<div class="chips" style="margin-top:6px">${pop.map(g => `<button class="chip sm" data-act="tagadd" data-g="${esc(g)}">#${esc(g)}</button>`).join('')}</div>` : ''}
+  ${isX ? '' : `<span class="l">카테고리</span><div class="chips">${cats.map(c => `<button class="chip ${f.cat === c.id ? 'on' : ''}" data-act="fcat" data-id="${c.id}">${esc(c.emoji + ' ' + c.name)}</button>`).join('')}</div>`}
+  <label class="l" for="f-pay">${isX ? '보내는 계좌' : '결제수단'}</label><select class="inp" id="f-pay">${payOpts(f.pay)}</select>
+  ${isX ? `<label class="l" for="f-to">받는 계좌</label><select class="inp" id="f-to">${payOpts(f.to)}</select><div class="hint">이체는 수입·지출 합계에 포함되지 않고, 두 계좌의 잔고만 바뀌어요. 카드는 잔고가 없으므로 카드로 보내면(카드값 납부) 보내는 계좌 잔고만 줄어요.</div>` : ''}
+  <label class="l" for="f-memo">메모</label><input class="inp" id="f-memo" type="text" maxlength="60" placeholder="${isX ? '예: 카드값 납부, 생활비 이체' : '예: 점심, 마트'}" value="${esc(f.memo)}">
+  ${isX ? '' : `<label class="l" for="f-tags">태그</label><input class="inp" id="f-tags" type="text" placeholder="예: 여행 회식 (띄어쓰기로 구분)" value="${esc(f.tags.join(' '))}">`}
+  ${pop.length && !isX ?`<div class="chips" style="margin-top:6px">${pop.map(g => `<button class="chip sm" data-act="tagadd" data-g="${esc(g)}">#${esc(g)}</button>`).join('')}</div>` : ''}
   ${isRec ? '<div class="hint">등록한 날짜가 되면 자동으로 내역에 기록돼요. 이미 기록된 내역은 바뀌지 않아요.</div>' : ''}
   <div class="btnrow">${editing ? '<button class="btn danger" data-act="fdel">삭제</button>' : ''}<button class="btn primary" data-act="fsave">저장</button></div>`;
 }
@@ -446,17 +450,19 @@ function openRecForm(r) { ui.f = newDraft('rec', r); if (!r) ui.f.start = monthO
 function saveForm() {
   syncForm(); const f = ui.f;
   if (!f.amount) { toast('금액을 입력해 주세요'); return; }
-  if (!f.cat) { toast('카테고리를 선택해 주세요'); return; }
+  const isX = f.type === 'xfer';
+  if (!isX && !f.cat) { toast('카테고리를 선택해 주세요'); return; }
   if (!f.pay) { toast('결제수단을 먼저 추가해 주세요'); return; }
+  if (isX && (!f.to || f.to === f.pay)) { toast('보내는 계좌와 받는 계좌를 서로 다르게 골라 주세요'); return; }
   if (f.mode === 'rec') {
     let r = f.id && S.rec.find(x => x.id === f.id);
     if (!r) { r = { id: uid(), start: f.start || monthOf(todayStr()) }; S.rec.push(r); }
-    Object.assign(r, { type: f.type, amount: f.amount, day: f.day, cat: f.cat, pay: f.pay, memo: f.memo, tags: f.tags, d: 0 }); touch(r);
+    Object.assign(r, { type: f.type, amount: f.amount, day: f.day, cat: isX ? '' : f.cat, pay: f.pay, to: isX ? f.to : '', memo: f.memo, tags: isX ? [] : f.tags, d: 0 }); touch(r);
     save(); genRecurring(); closeSheet(); render(); toast('반복 거래를 저장했어요'); return;
   }
   let t = f.id && S.tx.find(x => x.id === f.id), isNew = !t;
   if (!t) { t = { id: uid() }; S.tx.push(t); }
-  Object.assign(t, { type: f.type, amount: f.amount, date: f.date, cat: f.cat, pay: f.pay, memo: f.memo, tags: f.tags }); touch(t);
+  Object.assign(t, { type: f.type, amount: f.amount, date: f.date, cat: isX ? '' : f.cat, pay: f.pay, to: isX ? f.to : '', memo: f.memo, tags: isX ? [] : f.tags }); touch(t);
   save(); ui.ym = monthOf(t.date); closeSheet(); render();
   const note = isNew ? budgetNote(t) : ''; toast(note || '저장했어요');
 }
@@ -519,7 +525,9 @@ document.addEventListener('click', e => {
     case 'ftoggle': ui.fopen = !ui.fopen; render(); break;
     case 'add': openTxForm(); break;
     case 'edit': openTxForm(S.tx.find(t => t.id === d.id)); break;
-    case 'ftype': syncForm(); f.type = d.k; f.cat = (catsOf(d.k)[0] || {}).id || ''; setSheet(txFormHTML()); break;
+    case 'ftype': syncForm(); f.type = d.k; f.cat = (catsOf(d.k)[0] || {}).id || '';
+      if (d.k === 'xfer' && (!f.to || f.to === f.pay)) f.to = (live(S.pays).find(p => p.id !== f.pay) || {}).id || '';
+      setSheet(txFormHTML()); break;
     case 'fcat': syncForm(); f.cat = d.id; setSheet(txFormHTML()); break;
     case 'tagadd': { const inp = $('f-tags'), cur = parseTags(inp.value); if (!cur.includes(d.g)) cur.push(d.g); inp.value = cur.join(' '); break; }
     case 'fsave': saveForm(); break;
