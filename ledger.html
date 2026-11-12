@@ -195,6 +195,8 @@ const addMonth = (ym, n) => { let [y, m] = ym.split('-').map(Number); m += n - 1
 const daysIn = ym => { const [y, m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); };
 const live = a => a.filter(x => !x.d);
 const num = v => { const n = parseInt(String(v == null ? '' : v).replace(/[^\d]/g, ''), 10); return isFinite(n) ? n : 0; };
+const numS = v => { const s = String(v == null ? '' : v).trim(); return (/^[-−–]/.test(s) ? -1 : 1) * num(s); };   // 마이너스 허용
+const fmtN = n => n ? n.toLocaleString('ko-KR') : '';
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -223,6 +225,8 @@ function saveLocal() { lsSet(KEY, JSON.stringify(S)); }
 function save() { S.updatedAt = Date.now(); saveLocal(); lsSet(LS_DIRTY, '1'); schedulePush(); }
 function touch(o) { o.u = Date.now(); return o; }
 
+const payNet = id => live(S.tx).filter(t => t.pay === id).reduce((x, t) => x + (t.type === 'in' ? t.amount : -t.amount), 0);
+const payBalance = p => p.init + payNet(p.id);   // 시작 잔액 + 기록된 수입 - 지출
 const catById = id => S.cats.find(c => c.id === id);
 const payById = id => S.pays.find(p => p.id === id);
 const catsOf = type => live(S.cats).filter(c => c.type === type);
@@ -359,7 +363,7 @@ function statsHTML() {
   });
   const tagRows = Object.keys(s.tag).map(g => ({ g, v: s.tag[g] })).sort((a, b) => b.v - a.v).slice(0, 8);
   const payRows = live(S.pays).map(p => {
-    const spent = s.pay[p.id] || 0, bal = p.kind === 'card' ? null : p.init + live(S.tx).filter(t => t.pay === p.id).reduce((x, t) => x + (t.type === 'in' ? t.amount : -t.amount), 0);
+    const spent = s.pay[p.id] || 0, bal = p.kind === 'card' ? null : payBalance(p);
     return { p, spent, bal };
   });
   return `<div class="seg"><button data-act="st" data-k="out" class="${type === 'out' ? 'on' : ''}">지출</button><button data-act="st" data-k="in" class="${type === 'in' ? 'on' : ''}">수입</button></div>
@@ -393,7 +397,7 @@ function manageHTML() {
     <div class="muted" style="margin:.9rem 0 .3rem">수입</div>
     ${catsOf('in').map(c => item(esc(c.emoji), PALETTE[c.color % PALETTE.length], esc(c.name), '', 'editCat', c.id)).join('')}<button class="addbtn" data-act="addCat" data-t="in">＋ 수입 카테고리 추가</button></div>
   <div class="card"><h2>💳 결제수단</h2>
-    ${live(S.pays).map(p => item(esc(payIcon(p)), '#0f766e', esc(p.name), `${kinds[p.kind]}${p.kind !== 'card' ? ' · 시작 잔액 ' + won(p.init) : ''}`, 'editPay', p.id)).join('')}
+    ${live(S.pays).map(p => item(esc(payIcon(p)), '#0f766e', esc(p.name), kinds[p.kind], 'editPay', p.id, p.kind === 'card' ? '' : `<span class="amt ${payBalance(p) < 0 ? 'out' : ''}">${payBalance(p) < 0 ? '-' : ''}${won(Math.abs(payBalance(p)))}</span>`)).join('')}
     <button class="addbtn" data-act="addPay">＋ 결제수단 추가</button></div>
   <div class="card"><h2>☁️ 구글 시트 동기화</h2><div class="muted">${SYNC_URL ? '연결됨 ✓' : '연결 안 됨 (이 기기에만 저장 중)'}</div><div class="btnrow"><button class="btn primary" data-act="sync">${SYNC_URL ? '동기화 설정' : '연결하기'}</button></div></div>
   <div class="card"><h2>🗑️ 초기화</h2><div class="muted">모든 기록을 지우고 처음 상태로 되돌려요.</div><div class="btnrow"><button class="btn danger" data-act="reset">모든 기록 지우기</button></div></div>`;
@@ -479,7 +483,7 @@ function catFormHTML() {
   <div class="btnrow">${f.id ? '<button class="btn danger" data-act="fdelcat">삭제</button>' : ''}<button class="btn primary" data-act="fsavecat">저장</button></div>`;
 }
 function openPayForm(p) {
-  ui.f = p ? { mode: 'pay', id: p.id, name: p.name, kind: p.kind, init: p.init, emoji: p.emoji || '' } : { mode: 'pay', name: '', kind: 'card', init: 0, emoji: '' };
+  ui.f = p ? { mode: 'pay', id: p.id, name: p.name, kind: p.kind, bal: payBalance(p), emoji: p.emoji || '' } : { mode: 'pay', name: '', kind: 'card', bal: 0, emoji: '' };
   setSheet(payFormHTML());
 }
 function payFormHTML() {
@@ -488,10 +492,10 @@ function payFormHTML() {
   <label class="l" for="f-name">이름</label><input class="inp" id="f-name" type="text" maxlength="14" placeholder="예: 신한카드" value="${esc(f.name)}">
   <span class="l">종류</span><div class="chips">${[['cash', '💵 현금'], ['bank', '🏦 계좌'], ['card', '💳 카드']].map(([k, n]) => `<button class="chip ${f.kind === k ? 'on' : ''}" data-act="fkind" data-k="${k}">${n}</button>`).join('')}</div>
   <span class="l">아이콘</span>${emojiPickerHTML(PAY_GROUPS, f.emoji || PAY_DEFAULT[f.kind])}
-  ${f.kind !== 'card' ? `<label class="l" for="f-init">시작 잔액</label><input class="inp" id="f-init" type="text" inputmode="numeric" value="${f.init ? f.init.toLocaleString('ko-KR') : ''}" placeholder="0"><div class="hint">앱에 기록하기 전부터 가지고 있던 금액이에요.</div>` : '<div class="hint">카드는 잔액 대신 이번 달 사용액을 통계 탭에서 볼 수 있어요.</div>'}
+  ${f.kind !== 'card' ? `<label class="l" for="f-init">${f.id ? '현재 잔고' : '현재 잔고 (지금 가진 금액)'}</label><div class="ecustom" style="margin-top:0"><input class="inp amtinp" id="f-init" type="text" inputmode="numeric" value="${fmtN(f.bal)}" placeholder="0"><button class="btn" data-act="fsign" style="flex:0 0 auto">±</button></div><div class="hint">실제 잔고와 다르면 여기서 고치세요. 저장하면 기록된 내역은 그대로 두고, 시작 잔액이 자동으로 조정돼서 현재 잔고가 입력한 금액과 같아져요. 마이너스 잔고는 ± 버튼으로 입력해요.</div>` : '<div class="hint">카드는 잔액 대신 이번 달 사용액을 통계 탭에서 볼 수 있어요.</div>'}
   <div class="btnrow">${f.id ? '<button class="btn danger" data-act="fdelpay">삭제</button>' : ''}<button class="btn primary" data-act="fsavepay">저장</button></div>`;
 }
-function syncNameInit() { const f = ui.f; if ($('f-name')) f.name = $('f-name').value.trim(); if ($('f-init')) f.init = num($('f-init').value); }
+function syncNameInit() { const f = ui.f; if ($('f-name')) f.name = $('f-name').value.trim(); if ($('f-init')) f.bal = numS($('f-init').value); }
 
 function syncSheetHTML() {
   const link = SYNC_URL ? `${location.origin}${location.pathname}#sync=${encodeURIComponent(SYNC_URL)}` : '';
@@ -540,11 +544,13 @@ document.addEventListener('click', e => {
       if (confirm('이 카테고리를 삭제할까요? 기존 내역은 그대로 남아요.')) { const c = catById(f.id); c.d = 1; touch(c); save(); closeSheet(); render(); toast('삭제했어요'); } break;
     case 'addPay': openPayForm(); break;
     case 'editPay': openPayForm(payById(d.id)); break;
+    case 'fsign': { const inp = $('f-init'), n = -numS(inp.value); inp.value = fmtN(n); f.bal = n; break; }
     case 'fkind': syncNameInit(); f.kind = d.k; setSheet(payFormHTML()); break;
     case 'fsavepay': {
       syncNameInit(); if (!f.name) { toast('이름을 입력해 주세요'); break; }
       let p = f.id && payById(f.id); if (!p) { p = { id: uid() }; S.pays.push(p); }
-      p.name = f.name; p.kind = f.kind; p.emoji = f.emoji; p.init = f.kind === 'card' ? 0 : f.init; p.d = 0; touch(p); save(); closeSheet(); render(); toast('저장했어요'); break;
+      p.name = f.name; p.kind = f.kind; p.emoji = f.emoji; p.d = 0; p.init = 0; if (f.kind !== 'card') p.init = f.bal - payNet(p.id);   // 현재 잔고가 입력값과 같아지도록 시작 잔액 조정
+ touch(p); save(); closeSheet(); render(); toast('저장했어요'); break;
     }
     case 'fdelpay': if (live(S.pays).length <= 1) { toast('결제수단은 최소 1개 필요해요'); break; }
       if (confirm('이 결제수단을 삭제할까요? 기존 내역은 그대로 남아요.')) { const p = payById(f.id); p.d = 1; touch(p); save(); closeSheet(); render(); toast('삭제했어요'); } break;
@@ -567,7 +573,11 @@ document.addEventListener('input', e => {
     const c = firstChar(t.value); if (!c) return;
     ui.f.emoji = c; t.value = c; $('f-eprev').textContent = c; document.querySelectorAll('.eb.on').forEach(x => x.classList.remove('on'));
   }
-  if (t.id === 'f-amount' || t.id === 'f-init' || (t.dataset && t.dataset.bud)) {   // 숫자 입력칸: 천 단위 쉼표 표시
+  if (t.id === 'f-init') {   // 잔고: 마이너스 허용
+    const n = numS(t.value), neg = /^[-−–]/.test(t.value.trim());
+    t.value = n ? fmtN(n) : (neg ? '-' : ''); return;
+  }
+  if (t.id === 'f-amount' || (t.dataset && t.dataset.bud)) {   // 숫자 입력칸: 천 단위 쉼표 표시
     const n = num(t.value); t.value = n ? n.toLocaleString('ko-KR') : '';
     if (t.id === 'f-amount') $('f-amtview').textContent = n ? won(n) : '';
   }
