@@ -109,7 +109,7 @@
       <button class="primary" id="saveSetup" style="flex:1">저장</button>
       <button class="primary" id="shareBtn" style="background:var(--green)">아내에게 링크 복사</button>
     </div>
-    <p class="hint">아내분께는 "링크 복사" 버튼으로 만든 링크를 보내 주세요. 링크를 열면 URL이 자동으로 설정돼요. 이름만 따로 입력하면 돼요.</p>
+    <p class="hint">"아내에게 링크 복사"로 만든 링크 <b>하나만</b> 보내 주세요. 아내분이 사파리에서 그 링크를 열고 <b>홈 화면에 추가</b>하면, 연결 주소와 이름("아내")이 자동으로 들어가요. 링크에는 연결 주소가 들어 있으니 두 분만 아는 곳에 보내 주세요.</p>
   </div>
 
   <!-- 입력 -->
@@ -216,10 +216,13 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
-// 공유 링크(#u=...)로 들어오면 URL 자동 설정
+// 공유 링크(#u=연결주소&n=이름)로 들어오면 첫 실행에 한해 자동 설정한다.
+// 주소의 #...는 일부러 지우지 않는다: 아이폰은 홈 화면에 추가할 때 이 주소를 앱의 시작 주소로 쓰고,
+// 홈 화면 앱은 사파리와 저장 공간이 따로라서 이 값이 있어야 설정이 따라간다.
 (function () {
-  const m = location.hash.match(/u=([^&]+)/);
-  if (m) { store.set('fridgeUrl', decodeURIComponent(m[1])); history.replaceState(null, '', location.pathname); }
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('u') && !store.get('fridgeUrl', '')) store.set('fridgeUrl', h.get('u'));
+  if (h.get('n') && !store.get('fridgeWho', '')) store.set('fridgeWho', h.get('n'));
 })();
 
 let URL_ = store.get('fridgeUrl', '');
@@ -631,7 +634,7 @@ $('saveSetup').onclick = () => {
 $('shareBtn').onclick = async () => {
   const url = $('urlInput').value.trim() || URL_;
   if (!url) return;
-  const link = `${location.origin}${location.pathname}#u=${encodeURIComponent(url)}`;
+  const link = `${location.origin}${location.pathname}#u=${encodeURIComponent(url)}&n=${encodeURIComponent('아내')}`;
   try { await navigator.clipboard.writeText(link); setStatus('링크를 복사했어요. 아내에게 보내 주세요.'); }
   catch { prompt('이 링크를 아내에게 보내 주세요', link); }
 };
