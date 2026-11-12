@@ -84,6 +84,12 @@
   .donutwrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
   .donutwrap svg { width:190px; height:190px; }
   .legend { width:100%; }
+  .selbar { width:100%; display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:12px; color:var(--text3); }
+  .lgb { width:100%; background:none; border:none; border-bottom:1px solid var(--border); text-align:left; font:inherit; font-size:14px; color:inherit; }
+  .lgb.off { opacity:.5; } .lgb.off .n { text-decoration:line-through; }
+  .chk { flex:0 0 18px; height:18px; border-radius:5px; border:1.5px solid var(--accent); background:var(--accent); color:var(--accent-text); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .lgb.off .chk { background:none; border-color:var(--text3); }
+  .lg.total { font-weight:700; border-top:2px solid var(--border); border-bottom:none; padding-top:8px; }
   .lg { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:14px; border-bottom:1px solid var(--border); }
   .lg:last-child { border-bottom:none; }
   .dot { width:10px; height:10px; border-radius:50%; flex:0 0 10px; }
@@ -281,7 +287,7 @@ function genRecurring() {
 }
 
 /* ---------- 화면 상태 ---------- */
-const ui = { tab: 'home', ym: monthOf(todayStr()), q: '', ft: '', fc: '', fp: '', fg: '', fopen: false, st: 'out', f: null };
+const ui = { ex: { out: {}, in: {} }, tab: 'home', ym: monthOf(todayStr()), q: '', ft: '', fc: '', fp: '', fg: '', fopen: false, st: 'out', f: null };
 
 function render() {
   $('nav').innerHTML = [['home', '📒', '내역'], ['stats', '📊', '통계'], ['budget', '🎯', '예산'], ['manage', '⚙️', '관리']]
@@ -344,15 +350,20 @@ function renderList() {
 /* ---------- 통계 ---------- */
 function statsHTML() {
   const s = sums(ui.ym), type = ui.st;
-  const total = s[type], data = {};
+  const data = {}, ex = ui.ex[type];   // ex: 합계에서 뺀 카테고리(기본값은 전부 포함)
   monthTx(ui.ym).filter(t => t.type === type).forEach(t => { data[t.cat] = (data[t.cat] || 0) + t.amount; });
   const rows = Object.keys(data).map(id => ({ id, v: data[id] })).sort((a, b) => b.v - a.v);
+  const all = rows.reduce((x, r) => x + r.v, 0), inc = rows.filter(r => !ex[r.id]), total = inc.reduce((x, r) => x + r.v, 0), partial = inc.length !== rows.length;
   let donut = '';
-  if (total > 0) {
+  if (all > 0) {
     const R = 40, C = 2 * Math.PI * R; let off = 0, seg = '';
-    rows.forEach(r => { const len = r.v / total * C; seg += `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${catColor(r.id)}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; });
-    donut = `<div class="donutwrap"><svg viewBox="0 0 120 120">${seg}<text x="60" y="57" text-anchor="middle" font-size="7" fill="var(--text3)">${type === 'out' ? '총 지출' : '총 수입'}</text><text x="60" y="68" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text)">${total.toLocaleString('ko-KR')}</text></svg>
-    <div class="legend">${rows.map(r => `<div class="lg"><span class="dot" style="background:${catColor(r.id)}"></span><span class="n">${esc(catIcon(r.id) + ' ' + catName(r.id))}</span><span class="p">${(r.v / total * 100).toFixed(0)}%</span><span class="v">${won(r.v)}</span></div>`).join('')}</div></div>`;
+    if (total > 0) inc.forEach(r => { const len = r.v / total * C; seg += `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${catColor(r.id)}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; });
+    else seg = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--muted-bg)" stroke-width="22"/>`;
+    donut = `<div class="donutwrap"><svg viewBox="0 0 120 120">${seg}<text x="60" y="57" text-anchor="middle" font-size="7" fill="var(--text3)">${partial ? '선택 합계' : type === 'out' ? '총 지출' : '총 수입'}</text><text x="60" y="68" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text)">${total.toLocaleString('ko-KR')}</text></svg>
+    <div class="selbar"><span>항목을 눌러 합계에 넣고 빼세요</span><span><button class="chip sm" data-act="catall">전체 선택</button> <button class="chip sm" data-act="catnone">전체 해제</button></span></div>
+    <div class="legend">${rows.map(r => { const off2 = !!ex[r.id]; return `<button class="lg lgb ${off2 ? 'off' : ''}" data-act="cattoggle" data-id="${esc(r.id)}"><span class="chk">${off2 ? '' : '✓'}</span><span class="dot" style="background:${catColor(r.id)}"></span><span class="n">${esc(catIcon(r.id) + ' ' + catName(r.id))}</span><span class="p">${off2 ? '제외' : (total ? (r.v / total * 100).toFixed(0) + '%' : '')}</span><span class="v">${won(r.v)}</span></button>`; }).join('')}
+    <div class="lg total"><span class="n">${partial ? `선택 합계 (${inc.length}/${rows.length}개)` : '합계'}</span><span class="v">${won(total)}</span></div>
+    ${partial ? `<div class="hint" style="text-align:right">전체 ${won(all)} 중 ${won(all - total)} 제외</div>` : ''}</div></div>`;
   } else donut = '<div class="empty">이 달 기록이 없어요</div>';
 
   const months = []; for (let i = 5; i >= 0; i--) months.push(addMonth(ui.ym, -i));
@@ -522,6 +533,9 @@ document.addEventListener('click', e => {
     case 'prev': ui.ym = addMonth(ui.ym, -1); render(); break;
     case 'next': ui.ym = addMonth(ui.ym, 1); render(); break;
     case 'st': ui.st = d.k; render(); break;
+    case 'cattoggle': { const ex = ui.ex[ui.st]; if (ex[d.id]) delete ex[d.id]; else ex[d.id] = 1; render(); break; }
+    case 'catall': ui.ex[ui.st] = {}; render(); break;
+    case 'catnone': { const ex = {}; monthTx(ui.ym).filter(t => t.type === ui.st).forEach(t => { ex[t.cat] = 1; }); ui.ex[ui.st] = ex; render(); break; }
     case 'ftoggle': ui.fopen = !ui.fopen; render(); break;
     case 'add': openTxForm(); break;
     case 'edit': openTxForm(S.tx.find(t => t.id === d.id)); break;
