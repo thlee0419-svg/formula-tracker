@@ -213,14 +213,14 @@ function blank() {
   const inc = [['급여', '💼'], ['부수입', '💰'], ['용돈', '🧧'], ['기타', '➕']];
   const mk = (arr, type) => arr.map(([name, emoji], i) => ({ id: `c_${type}_${i}`, type, name, emoji, color: i % PALETTE.length, u: 0 }));
   return {
-    v: 1, updatedAt: 0, tx: [], budgets: [], rec: [],
+    v: 1, updatedAt: 0, tx: [], budgets: [], rec: [], pts: [], plog: [],
     cats: [...mk(out, 'out'), ...mk(inc, 'in')],
     pays: [{ id: 'p_0', name: '현금', kind: 'cash', init: 0, u: 0 }, { id: 'p_1', name: '체크카드', kind: 'card', init: 0, u: 0 }, { id: 'p_2', name: '신용카드', kind: 'card', init: 0, u: 0 }, { id: 'p_3', name: '주계좌', kind: 'bank', init: 0, u: 0 }],
   };
 }
 function norm(s) {
   const b = blank();
-  ['tx', 'budgets', 'rec', 'cats', 'pays'].forEach(k => { if (!Array.isArray(s[k])) s[k] = b[k]; });
+  ['tx', 'budgets', 'rec', 'cats', 'pays', 'pts', 'plog'].forEach(k => { if (!Array.isArray(s[k])) s[k] = b[k]; });
   s.tx.forEach(t => { if (!Array.isArray(t.tags)) t.tags = []; });
   s.updatedAt = s.updatedAt || 0; return s;
 }
@@ -267,7 +267,71 @@ function budgetAlerts(ym) {
   const tb = budgetOf('total');
   if (tb) { const st = budgetState(s.out, tb); if (st) list.push({ st, msg: `전체 예산 ${st === 'over' ? '초과' : '80% 도달'} (${won(s.out)} / ${won(tb)})` }); }
   catsOf('out').forEach(c => { const b = budgetOf(c.id); if (!b) return; const sp = s.cat[c.id] || 0, st = budgetState(sp, b); if (st) list.push({ st, msg: `${c.emoji} ${c.name} 예산 ${st === 'over' ? '초과' : '80% 도달'} (${won(sp)} / ${won(b)})` }); });
+  ptAccts().forEach(a => { if (!a.limit) return; const u = ptMonth(a.id, ym).use, st = budgetState(u, a.limit); if (st) list.push({ st, msg: `${a.emoji || '🪙'} ${a.name} 월 사용 한도 ${st === 'over' ? '초과' : '80% 도달'} (${ptFmt(u, a)} / ${ptFmt(a.limit, a)})` }); });
   return list;
+}
+
+/* ---------- 포인트/마일리지 (원화 합계와 별도로 관리) ---------- */
+const PT_GROUPS = { '포인트·마일리지': ['🪙', '✈️', '🎫', '⭐', '💎', '🎁', '🛍️', '☕', '🚌', '⛽', '🏪', '📱', '💳', '🏨', '🎬', '🍔'] };
+const PT_UNITS = ['P', '마일', '원', '점'];
+const ptById = id => S.pts.find(a => a.id === id);
+const ptAccts = () => live(S.pts);
+const ptNet = id => live(S.plog).filter(e => e.acct === id).reduce((x, e) => x + (e.kind === 'earn' ? e.amount : -e.amount), 0);
+const ptBalance = a => a.init + ptNet(a.id);   // 시작 잔액 + 적립 - 사용
+const ptMonth = (id, ym) => { const r = { earn: 0, use: 0 }; live(S.plog).forEach(e => { if (e.acct === id && monthOf(e.date) === ym) r[e.kind] += e.amount; }); return r; };
+const ptFmt = (n, a) => (n < 0 ? '-' : '') + Math.abs(Math.round(n)).toLocaleString('ko-KR') + ' ' + (a.unit || 'P');
+function ptCardHTML() {
+  const ym = ui.ym, mo = +ym.slice(5);
+  const rows = ptAccts().map(a => {
+    const m = ptMonth(a.id, ym), bal = ptBalance(a), st = budgetState(m.use, a.limit || 0), r = a.limit ? Math.min(m.use / a.limit, 1) : 0;
+    return `<button class="list-item" data-act="ptOpen" data-id="${a.id}"><span class="ico" style="background:#d9770622">${esc(a.emoji || '🪙')}</span>
+      <span class="mid"><b>${esc(a.name)}</b><small>${mo}월 적립 +${fmtN(m.earn) || 0} · 사용 -${fmtN(m.use) || 0}</small>
+      ${a.limit ? `<div class="bar ${st}"><i style="width:${r * 100}%"></i></div><small>월 사용 한도 ${ptFmt(a.limit, a)} 중 ${(m.use / a.limit * 100).toFixed(0)}% 사용</small>` : ''}</span>
+      <span class="amt ${bal < 0 ? 'out' : ''}">${ptFmt(bal, a)}</span></button>`;
+  }).join('');
+  return `<div class="card"><h2>🪙 포인트 / 마일리지</h2>${rows || '<div class="empty">카드 포인트, 항공 마일리지, 페이 포인트처럼<br>돈이 아닌 포인트를 따로 관리해 보세요</div>'}<button class="addbtn" data-act="ptAdd">＋ 포인트/마일리지 추가</button>
+  <div class="hint">원화 수입·지출 합계에는 포함되지 않고 적립·사용 내역만 따로 기록해요. 월 사용 한도를 정하면 80%부터 알려 드려요.</div></div>`;
+}
+function ptDetailHTML(a) {
+  const ym = ui.ym, mo = +ym.slice(5), m = ptMonth(a.id, ym), bal = ptBalance(a);
+  const ents = live(S.plog).filter(e => e.acct === a.id).sort((x, y) => y.date.localeCompare(x.date) || (y.u || 0) - (x.u || 0)).slice(0, 40);
+  return `<h3>${esc((a.emoji || '🪙') + ' ' + a.name)}</h3>
+  <div class="sum"><div><small>현재 잔액</small><b>${ptFmt(bal, a)}</b></div><div class="in"><small>${mo}월 적립</small><b>${ptFmt(m.earn, a)}</b></div><div class="out"><small>${mo}월 사용</small><b>${ptFmt(m.use, a)}</b></div></div>
+  <div class="btnrow"><button class="btn primary" data-act="ptEntry" data-k="earn" data-id="${a.id}">＋ 적립</button><button class="btn" data-act="ptEntry" data-k="use" data-id="${a.id}">－ 사용</button></div>
+  <h2 style="margin-top:1rem">내역 (최근 40건)</h2>
+  ${ents.length ? `<div class="group">${ents.map(e => { const dt = new Date(e.date + 'T00:00:00'); return `<button class="row" data-act="ptEditE" data-id="${e.id}"><span class="mid"><b>${esc(e.memo || (e.kind === 'earn' ? '적립' : '사용'))}</b><small>${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]})</small></span><span class="amt ${e.kind === 'earn' ? 'in' : 'out'}">${e.kind === 'earn' ? '+' : '-'}${ptFmt(e.amount, a)}</span></button>`; }).join('')}</div>` : '<div class="empty">아직 내역이 없어요</div>'}
+  <div class="btnrow"><button class="btn" data-act="ptSet" data-id="${a.id}">설정 · 잔액 수정</button></div>`;
+}
+function openPtForm(a) {
+  ui.f = a ? { mode: 'pt', id: a.id, name: a.name, unit: a.unit || 'P', emoji: a.emoji || '🪙', bal: ptBalance(a), limit: a.limit || 0 } : { mode: 'pt', name: '', unit: 'P', emoji: '🪙', bal: 0, limit: 0 };
+  setSheet(ptFormHTML());
+}
+function ptSync() { const f = ui.f; if ($('f-name')) f.name = $('f-name').value.trim(); if ($('f-init')) f.bal = numS($('f-init').value); if ($('f-unit')) f.unit = $('f-unit').value.trim(); if ($('f-limit')) f.limit = num($('f-limit').value); }
+function ptFormHTML() {
+  const f = ui.f;
+  return `<h3>${f.id ? '포인트/마일리지 수정' : '포인트/마일리지 추가'}</h3>
+  <label class="l" for="f-name">이름</label><input class="inp" id="f-name" type="text" maxlength="14" placeholder="예: 네이버페이, 항공 마일리지" value="${esc(f.name)}">
+  <label class="l" for="f-unit">단위</label><input class="inp" id="f-unit" type="text" maxlength="6" value="${esc(f.unit)}"><div class="chips" style="margin-top:6px">${PT_UNITS.map(u => `<button class="chip sm" data-act="ptUnit" data-u="${u}">${u}</button>`).join('')}</div>
+  <span class="l">아이콘</span>${emojiPickerHTML(PT_GROUPS, f.emoji)}
+  <label class="l" for="f-init">${f.id ? '현재 잔액' : '현재 잔액 (지금 보유한 양)'}</label><div class="ecustom" style="margin-top:0"><input class="inp amtinp" id="f-init" type="text" inputmode="numeric" value="${fmtN(f.bal)}" placeholder="0"><button class="btn" data-act="fsign" style="flex:0 0 auto">±</button></div>
+  <div class="hint">실제 보유량과 다르면 여기서 고치세요. 저장하면 내역은 그대로 두고 시작 잔액이 자동으로 조정돼요.</div>
+  <label class="l" for="f-limit">월 사용 한도 (선택)</label><input class="inp" id="f-limit" type="text" inputmode="numeric" placeholder="한도 없음" value="${fmtN(f.limit)}">
+  <div class="btnrow">${f.id ? '<button class="btn danger" data-act="ptDelA">삭제</button>' : ''}<button class="btn primary" data-act="ptSaveA">저장</button></div>`;
+}
+function openPleForm(acct, kind, e) {
+  ui.f = e ? { mode: 'ple', id: e.id, acct: e.acct, kind: e.kind, amount: e.amount, date: e.date, memo: e.memo || '' }
+    : { mode: 'ple', acct, kind, amount: 0, date: ui.ym === monthOf(todayStr()) ? todayStr() : ui.ym + '-01', memo: '' };
+  setSheet(pleFormHTML()); if (!e) setTimeout(() => { const x = $('f-amount'); x && x.focus(); }, 50);
+}
+function pleFormHTML() {
+  const f = ui.f, a = ptById(f.acct);
+  return `<h3>${esc(a.name)} ${f.id ? '내역 수정' : '내역 추가'}</h3>
+  <div class="seg"><button data-act="ptKindSw" data-k="earn" class="${f.kind === 'earn' ? 'on' : ''}">적립</button><button data-act="ptKindSw" data-k="use" class="${f.kind === 'use' ? 'on' : ''}">사용</button></div>
+  <label class="l" for="f-amount">수량 (${esc(a.unit || 'P')})</label>
+  <input class="inp amtinp" id="f-amount" type="text" inputmode="numeric" placeholder="0" value="${fmtN(f.amount)}"><div class="amtview" id="f-amtview">${f.amount ? ptFmt(f.amount, a) : ''}</div>
+  <label class="l" for="f-date">날짜</label><input class="inp" id="f-date" type="date" value="${f.date}">
+  <label class="l" for="f-memo">메모</label><input class="inp" id="f-memo" type="text" maxlength="60" placeholder="예: 편의점 결제 적립, 항공권 발권" value="${esc(f.memo)}">
+  <div class="btnrow">${f.id ? '<button class="btn danger" data-act="ptDelE">삭제</button>' : ''}<button class="btn primary" data-act="ptSaveE">저장</button></div>`;
 }
 
 /* ---------- 반복 거래 ---------- */
@@ -394,7 +458,8 @@ function budgetHTML() {
     ${b ? `<div class="bar ${st}"><i style="width:${r * 100}%"></i></div><div class="bsub"><span>${won(spent)} 사용 (${(spent / b * 100).toFixed(0)}%)</span><span>${b - spent >= 0 ? '남음 ' + won(b - spent) : '초과 ' + won(spent - b)}</span></div>` : `<div class="bsub"><span>${won(spent)} 사용</span><span></span></div>`}</div>`;
   };
   return `<div class="card"><h2>월 예산 (매달 같은 금액)</h2>${row('total', '💳 전체 예산', s.out)}</div>
-  <div class="card"><h2>카테고리별 예산</h2>${catsOf('out').map(c => row(c.id, esc(c.emoji + ' ' + c.name), s.cat[c.id] || 0)).join('')}<div class="hint">금액을 입력하면 저장돼요. 80%에 가까워지면 알려 드리고, 넘으면 빨간색으로 표시해요.</div></div>`;
+  <div class="card"><h2>카테고리별 예산</h2>${catsOf('out').map(c => row(c.id, esc(c.emoji + ' ' + c.name), s.cat[c.id] || 0)).join('')}<div class="hint">금액을 입력하면 저장돼요. 80%에 가까워지면 알려 드리고, 넘으면 빨간색으로 표시해요.</div></div>
+  ${ptCardHTML()}`;
 }
 
 /* ---------- 관리 ---------- */
@@ -576,6 +641,29 @@ document.addEventListener('click', e => {
     }
     case 'fdelpay': if (live(S.pays).length <= 1) { toast('결제수단은 최소 1개 필요해요'); break; }
       if (confirm('이 결제수단을 삭제할까요? 기존 내역은 그대로 남아요.')) { const p = payById(f.id); p.d = 1; touch(p); save(); closeSheet(); render(); toast('삭제했어요'); } break;
+    case 'ptOpen': ui.f = null; setSheet(ptDetailHTML(ptById(d.id))); break;
+    case 'ptAdd': openPtForm(); break;
+    case 'ptSet': openPtForm(ptById(d.id)); break;
+    case 'ptUnit': $('f-unit').value = d.u; f.unit = d.u; break;
+    case 'ptSaveA': {
+      ptSync(); if (!f.name) { toast('이름을 입력해 주세요'); break; }
+      let a = f.id && ptById(f.id); if (!a) { a = { id: uid() }; S.pts.push(a); }
+      a.name = f.name; a.unit = f.unit || 'P'; a.emoji = f.emoji; a.limit = f.limit; a.d = 0; a.init = 0; a.init = f.bal - ptNet(a.id);   // 현재 잔액이 입력값과 같아지도록 시작 잔액 조정
+      touch(a); save(); closeSheet(); render(); toast('저장했어요'); break;
+    }
+    case 'ptDelA': if (confirm('이 포인트/마일리지를 삭제할까요? 적립·사용 내역도 함께 사라져요.')) { const a = ptById(f.id); a.d = 1; touch(a); save(); closeSheet(); render(); toast('삭제했어요'); } break;
+    case 'ptEntry': openPleForm(d.id, d.k); break;
+    case 'ptEditE': { const e = S.plog.find(x => x.id === d.id); openPleForm(e.acct, e.kind, e); break; }
+    case 'ptKindSw': syncForm(); f.kind = d.k; setSheet(pleFormHTML()); break;
+    case 'ptSaveE': {
+      syncForm(); if (!f.amount) { toast('수량을 입력해 주세요'); break; }
+      let e = f.id && S.plog.find(x => x.id === f.id); if (!e) { e = { id: uid() }; S.plog.push(e); }
+      Object.assign(e, { acct: f.acct, kind: f.kind, amount: f.amount, date: f.date, memo: f.memo, d: 0 }); touch(e); save();
+      const a = ptById(f.acct); ui.f = null; setSheet(ptDetailHTML(a)); render();
+      const st = f.kind === 'use' && a.limit ? budgetState(ptMonth(a.id, monthOf(f.date)).use, a.limit) : '';
+      toast(st ? `${st === 'over' ? '🚨' : '⚠️'} ${a.name} 월 사용 한도 ${st === 'over' ? '초과' : '80% 도달'}` : '저장했어요'); break;
+    }
+    case 'ptDelE': if (confirm('이 내역을 삭제할까요?')) { const e = S.plog.find(x => x.id === f.id), a = ptById(e.acct); e.d = 1; touch(e); save(); ui.f = null; setSheet(ptDetailHTML(a)); render(); toast('삭제했어요'); } break;
     case 'sync': setSheet(syncSheetHTML()); break;
     case 'syncSave': {
       const u = $('sync-url').value.trim();
@@ -599,9 +687,9 @@ document.addEventListener('input', e => {
     const n = numS(t.value), neg = /^[-−–]/.test(t.value.trim());
     t.value = n ? fmtN(n) : (neg ? '-' : ''); return;
   }
-  if (t.id === 'f-amount' || (t.dataset && t.dataset.bud)) {   // 숫자 입력칸: 천 단위 쉼표 표시
+  if (t.id === 'f-amount' || t.id === 'f-limit' || (t.dataset && t.dataset.bud)) {   // 숫자 입력칸: 천 단위 쉼표 표시
     const n = num(t.value); t.value = n ? n.toLocaleString('ko-KR') : '';
-    if (t.id === 'f-amount') $('f-amtview').textContent = n ? won(n) : '';
+    if (t.id === 'f-amount') { const pa = ui.f && ui.f.mode === 'ple' ? ptById(ui.f.acct) : null; $('f-amtview').textContent = n ? (pa ? ptFmt(n, pa) : won(n)) : ''; }
   }
 });
 document.addEventListener('change', e => {
@@ -627,7 +715,7 @@ async function pushNow() {
 // a: 이 기기, b: 시트. 항목별로 더 늦게 수정한 쪽을 쓴다(삭제도 수정으로 취급)
 function mergeStates(a, b) {
   const m = { ...b, ...a };
-  ['tx', 'cats', 'pays', 'budgets', 'rec'].forEach(k => {
+  ['tx', 'cats', 'pays', 'budgets', 'rec', 'pts', 'plog'].forEach(k => {
     const map = new Map();
     [...(b[k] || []), ...(a[k] || [])].forEach(x => { const o = map.get(x.id); if (!o || (x.u || 0) >= (o.u || 0)) map.set(x.id, x); });
     m[k] = [...map.values()];
