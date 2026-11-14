@@ -180,9 +180,12 @@ const EMOJI_GROUPS = {
 };
 const PAY_GROUPS = {
   '현금·계좌·카드': ['💵', '💴', '💶', '💷', '💳', '🏦', '🏧', '💰', '🪙', '👛', '💼', '🧾', '🔒', '💎'],
+  '포인트·마일리지': ['🪙', '🎫', '⭐', '✈️', '🎁', '🛍️', '🏨', '⛽', '☕', '🍔'],
   '간편결제·기타': ['📱', '🌐', '🏪', '🛍️', '🛒', '🐷', '🏠', '🚌', '🎁', '⭐', '❤️', '🔖', '📦', '🔑'],
 };
-const PAY_DEFAULT = { cash: '💵', bank: '🏦', card: '💳' };
+const PAY_DEFAULT = { cash: '💵', bank: '🏦', card: '💳', point: '🪙' };
+// 결제수단 잔액 표시: 포인트/마일리지는 단위(P, 마일 등)를 붙이고, 나머지는 원화
+const payFmt = (p, n) => p.kind === 'point' ? ptFmt(n, p) : (n < 0 ? '-' : '') + won(Math.abs(n));
 const payIcon = p => p.emoji || PAY_DEFAULT[p.kind] || '💳';
 const firstChar = s => { s = String(s || '').trim(); if (!s) return ''; if (window.Intl && Intl.Segmenter) { const it = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)[Symbol.iterator]().next(); return it.done ? '' : it.value.segment; } return Array.from(s)[0]; };
 function emojiPickerHTML(groups, sel) {
@@ -445,7 +448,7 @@ function statsHTML() {
   return `<div class="seg"><button data-act="st" data-k="out" class="${type === 'out' ? 'on' : ''}">지출</button><button data-act="st" data-k="in" class="${type === 'in' ? 'on' : ''}">수입</button></div>
   <div class="card"><h2>카테고리별 ${type === 'out' ? '지출' : '수입'}</h2>${donut}</div>
   <div class="card trend"><h2>최근 6개월 추이</h2><svg viewBox="0 0 300 126">${bars}</svg><div class="key"><span><i style="background:var(--in)"></i>수입</span><span><i style="background:var(--out)"></i>지출</span></div></div>
-  <div class="card"><h2>결제수단별 (이번 달 지출 · 현재 잔액)</h2>${payRows.map(r => `<div class="lg"><span class="n">${esc(payIcon(r.p) + ' ' + r.p.name)}${r.p.kind === 'card' ? ' <span class="rec-badge">카드</span>' : ''}</span><span class="v">${won(r.spent)}</span><span class="v">${r.bal == null ? '-' : (r.bal < 0 ? '-' : '') + won(Math.abs(r.bal))}</span></div>`).join('')}</div>
+  <div class="card"><h2>결제수단별 (이번 달 지출 · 현재 잔액)</h2>${payRows.map(r => `<div class="lg"><span class="n">${esc(payIcon(r.p) + ' ' + r.p.name)}${r.p.kind === 'card' ? ' <span class="rec-badge">카드</span>' : ''}</span><span class="v">${won(r.spent)}</span><span class="v">${r.bal == null ? '-' : payFmt(r.p, r.bal)}</span></div>`).join('')}</div>
   ${tagRows.length ? `<div class="card"><h2>태그별 지출</h2>${tagRows.map(r => `<div class="lg"><span class="n">#${esc(r.g)}</span><span class="v">${won(r.v)}</span></div>`).join('')}</div>` : ''}`;
 }
 
@@ -465,7 +468,7 @@ function budgetHTML() {
 /* ---------- 관리 ---------- */
 function manageHTML() {
   const item = (icon, color, title, sub, act, id, extra) => `<button class="list-item" data-act="${act}" data-id="${id}"><span class="ico" style="background:${color}22">${icon}</span><span class="mid"><b>${title}</b><small>${sub}</small></span>${extra || ''}</button>`;
-  const kinds = { cash: '현금', card: '카드', bank: '계좌' };
+  const kinds = { cash: '현금', card: '카드', bank: '계좌', point: '포인트/마일리지' };
   return `<div class="card"><h2>🔁 반복 거래 (고정 수입·지출)</h2>
     ${live(S.rec).map(r => item(r.type === 'xfer' ? '🔁' : esc(catIcon(r.cat)), r.type === 'xfer' ? '#6b7280' : catColor(r.cat), esc(r.memo || (r.type === 'xfer' ? '이체' : catName(r.cat))), `매월 ${r.day}일 · ${r.type === 'xfer' ? esc(payName(r.pay)) + ' → ' + esc(payName(r.to)) : esc(payName(r.pay))} · ${r.start.replace('-', '년 ')}월부터`, 'editRec', r.id, `<span class="amt ${r.type}">${r.type === 'xfer' ? '' : r.type === 'in' ? '+' : '-'}${won(r.amount)}</span>`)).join('') || '<div class="empty">월세, 통신비, 월급처럼 매달 반복되는 내역을 등록하면<br>해당 날짜에 자동으로 기록돼요</div>'}
     <button class="addbtn" data-act="addRec">＋ 반복 거래 추가</button></div>
@@ -474,7 +477,7 @@ function manageHTML() {
     <div class="muted" style="margin:.9rem 0 .3rem">수입</div>
     ${catsOf('in').map(c => item(esc(c.emoji), PALETTE[c.color % PALETTE.length], esc(c.name), '', 'editCat', c.id)).join('')}<button class="addbtn" data-act="addCat" data-t="in">＋ 수입 카테고리 추가</button></div>
   <div class="card"><h2>💳 결제수단</h2>
-    ${live(S.pays).map(p => item(esc(payIcon(p)), '#0f766e', esc(p.name), kinds[p.kind], 'editPay', p.id, p.kind === 'card' ? '' : `<span class="amt ${payBalance(p) < 0 ? 'out' : ''}">${payBalance(p) < 0 ? '-' : ''}${won(Math.abs(payBalance(p)))}</span>`)).join('')}
+    ${live(S.pays).map(p => item(esc(payIcon(p)), '#0f766e', esc(p.name), kinds[p.kind], 'editPay', p.id, p.kind === 'card' ? '' : `<span class="amt ${payBalance(p) < 0 ? 'out' : ''}">${payFmt(p, payBalance(p))}</span>`)).join('')}
     <button class="addbtn" data-act="addPay">＋ 결제수단 추가</button></div>
   <div class="card"><h2>☁️ 구글 시트 동기화</h2><div class="muted">${SYNC_URL ? '연결됨 ✓' : '연결 안 됨 (이 기기에만 저장 중)'}</div><div class="btnrow"><button class="btn primary" data-act="sync">${SYNC_URL ? '동기화 설정' : '연결하기'}</button></div></div>
   <div class="card"><h2>🗑️ 초기화</h2><div class="muted">모든 기록을 지우고 처음 상태로 되돌려요.</div><div class="btnrow"><button class="btn danger" data-act="reset">모든 기록 지우기</button></div></div>`;
@@ -565,19 +568,20 @@ function catFormHTML() {
   <div class="btnrow">${f.id ? '<button class="btn danger" data-act="fdelcat">삭제</button>' : ''}<button class="btn primary" data-act="fsavecat">저장</button></div>`;
 }
 function openPayForm(p) {
-  ui.f = p ? { mode: 'pay', id: p.id, name: p.name, kind: p.kind, bal: payBalance(p), emoji: p.emoji || '' } : { mode: 'pay', name: '', kind: 'card', bal: 0, emoji: '' };
+  ui.f = p ? { mode: 'pay', id: p.id, name: p.name, kind: p.kind, bal: payBalance(p), emoji: p.emoji || '', unit: p.unit || 'P' } : { mode: 'pay', name: '', kind: 'card', bal: 0, emoji: '', unit: 'P' };
   setSheet(payFormHTML());
 }
 function payFormHTML() {
   const f = ui.f;
   return `<h3>${f.id ? '결제수단 수정' : '결제수단 추가'}</h3>
   <label class="l" for="f-name">이름</label><input class="inp" id="f-name" type="text" maxlength="14" placeholder="예: 신한카드" value="${esc(f.name)}">
-  <span class="l">종류</span><div class="chips">${[['cash', '💵 현금'], ['bank', '🏦 계좌'], ['card', '💳 카드']].map(([k, n]) => `<button class="chip ${f.kind === k ? 'on' : ''}" data-act="fkind" data-k="${k}">${n}</button>`).join('')}</div>
+  <span class="l">종류</span><div class="chips">${[['cash', '💵 현금'], ['bank', '🏦 계좌'], ['card', '💳 카드'], ['point', '🪙 포인트/마일리지']].map(([k, n]) => `<button class="chip ${f.kind === k ? 'on' : ''}" data-act="fkind" data-k="${k}">${n}</button>`).join('')}</div>
   <span class="l">아이콘</span>${emojiPickerHTML(PAY_GROUPS, f.emoji || PAY_DEFAULT[f.kind])}
-  ${f.kind !== 'card' ? `<label class="l" for="f-init">${f.id ? '현재 잔고' : '현재 잔고 (지금 가진 금액)'}</label><div class="ecustom" style="margin-top:0"><input class="inp amtinp" id="f-init" type="text" inputmode="numeric" value="${fmtN(f.bal)}" placeholder="0"><button class="btn" data-act="fsign" style="flex:0 0 auto">±</button></div><div class="hint">실제 잔고와 다르면 여기서 고치세요. 저장하면 기록된 내역은 그대로 두고, 시작 잔액이 자동으로 조정돼서 현재 잔고가 입력한 금액과 같아져요. 마이너스 잔고는 ± 버튼으로 입력해요.</div>` : '<div class="hint">카드는 잔액 대신 이번 달 사용액을 통계 탭에서 볼 수 있어요.</div>'}
+  ${f.kind === 'point' ? `<label class="l" for="f-unit">단위</label><input class="inp" id="f-unit" type="text" maxlength="6" value="${esc(f.unit)}"><div class="chips" style="margin-top:6px">${PT_UNITS.map(u => `<button class="chip sm" data-act="ptUnit" data-u="${u}">${u}</button>`).join('')}</div>` : ''}
+  ${f.kind !== 'card' ? `<label class="l" for="f-init">${f.kind === 'point' ? (f.id ? '현재 보유량' : '현재 보유량 (지금 가진 양)') : (f.id ? '현재 잔고' : '현재 잔고 (지금 가진 금액)')}</label><div class="ecustom" style="margin-top:0"><input class="inp amtinp" id="f-init" type="text" inputmode="numeric" value="${fmtN(f.bal)}" placeholder="0"><button class="btn" data-act="fsign" style="flex:0 0 auto">±</button></div><div class="hint">실제 잔고와 다르면 여기서 고치세요. 저장하면 기록된 내역은 그대로 두고, 시작 잔액이 자동으로 조정돼서 현재 잔고가 입력한 금액과 같아져요. 마이너스 잔고는 ± 버튼으로 입력해요.</div>${f.kind === 'point' ? '<div class="hint">1포인트(마일)를 1원으로 계산해서, 이 결제수단으로 지출하면 원화 지출 합계에도 포함돼요. 원화 합계와 따로 적립·사용만 관리하려면 예산 탭의 포인트/마일리지를 쓰세요.</div>' : ''}` : '<div class="hint">카드는 잔액 대신 이번 달 사용액을 통계 탭에서 볼 수 있어요.</div>'}
   <div class="btnrow">${f.id ? '<button class="btn danger" data-act="fdelpay">삭제</button>' : ''}<button class="btn primary" data-act="fsavepay">저장</button></div>`;
 }
-function syncNameInit() { const f = ui.f; if ($('f-name')) f.name = $('f-name').value.trim(); if ($('f-init')) f.bal = numS($('f-init').value); }
+function syncNameInit() { const f = ui.f; if ($('f-name')) f.name = $('f-name').value.trim(); if ($('f-init')) f.bal = numS($('f-init').value); if ($('f-unit')) f.unit = $('f-unit').value.trim(); }
 
 function syncSheetHTML() {
   const link = SYNC_URL ? `${location.origin}${location.pathname}#sync=${encodeURIComponent(SYNC_URL)}` : '';
@@ -636,7 +640,7 @@ document.addEventListener('click', e => {
     case 'fsavepay': {
       syncNameInit(); if (!f.name) { toast('이름을 입력해 주세요'); break; }
       let p = f.id && payById(f.id); if (!p) { p = { id: uid() }; S.pays.push(p); }
-      p.name = f.name; p.kind = f.kind; p.emoji = f.emoji; p.d = 0; p.init = 0; if (f.kind !== 'card') p.init = f.bal - payNet(p.id);   // 현재 잔고가 입력값과 같아지도록 시작 잔액 조정
+      p.name = f.name; p.kind = f.kind; p.emoji = f.emoji; p.unit = f.kind === 'point' ? (f.unit || 'P') : ''; p.d = 0; p.init = 0; if (f.kind !== 'card') p.init = f.bal - payNet(p.id);   // 현재 잔고가 입력값과 같아지도록 시작 잔액 조정
  touch(p); save(); closeSheet(); render(); toast('저장했어요'); break;
     }
     case 'fdelpay': if (live(S.pays).length <= 1) { toast('결제수단은 최소 1개 필요해요'); break; }
