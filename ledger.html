@@ -85,7 +85,10 @@
   .donutwrap svg { width:190px; height:190px; }
   .legend { width:100%; }
   .selbar { width:100%; display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:12px; color:var(--text3); }
-  .lgb { width:100%; background:none; border:none; border-bottom:1px solid var(--border); text-align:left; font:inherit; font-size:14px; color:inherit; }
+  .lgb { width:100%; border-bottom:1px solid var(--border); font-size:14px; }
+  .chkb { flex:0 0 30px; height:30px; background:none; border:none; display:flex; align-items:center; justify-content:center; margin:-4px 0 -4px -6px; }
+  .lgmain { flex:1; min-width:0; display:flex; align-items:center; gap:8px; background:none; border:none; text-align:left; font:inherit; color:inherit; padding:4px 0; }
+  .lgmain .go { color:var(--text3); font-size:18px; line-height:1; }
   .lgb.off { opacity:.5; } .lgb.off .n { text-decoration:line-through; }
   .chk { flex:0 0 18px; height:18px; border-radius:5px; border:1.5px solid var(--accent); background:var(--accent); color:var(--accent-text); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
   .lgb.off .chk { background:none; border-color:var(--text3); }
@@ -324,7 +327,7 @@ function ptFormHTML() {
 function openPleForm(acct, kind, e) {
   ui.f = e ? { mode: 'ple', id: e.id, acct: e.acct, kind: e.kind, amount: e.amount, date: e.date, memo: e.memo || '' }
     : { mode: 'ple', acct, kind, amount: 0, date: ui.ym === monthOf(todayStr()) ? todayStr() : ui.ym + '-01', memo: '' };
-  setSheet(pleFormHTML()); if (!e) setTimeout(() => { const x = $('f-amount'); x && x.focus(); }, 50);
+  setSheet(pleFormHTML()); if (!e) focusAmount();
 }
 function pleFormHTML() {
   const f = ui.f, a = ptById(f.acct);
@@ -354,7 +357,7 @@ function genRecurring() {
 }
 
 /* ---------- 화면 상태 ---------- */
-const ui = { ex: { out: {}, in: {} }, tab: 'home', ym: monthOf(todayStr()), q: '', ft: '', fc: '', fp: '', fg: '', fopen: false, st: 'out', f: null };
+const ui = { cd: null, ex: { out: {}, in: {} }, tab: 'home', ym: monthOf(todayStr()), q: '', ft: '', fc: '', fp: '', fg: '', fopen: false, st: 'out', f: null };
 
 function render() {
   $('nav').innerHTML = [['home', '📒', '내역'], ['stats', '📊', '통계'], ['budget', '🎯', '예산'], ['manage', '⚙️', '관리']]
@@ -427,8 +430,8 @@ function statsHTML() {
     if (total > 0) inc.forEach(r => { const len = r.v / total * C; seg += `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${catColor(r.id)}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; });
     else seg = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--muted-bg)" stroke-width="22"/>`;
     donut = `<div class="donutwrap"><svg viewBox="0 0 120 120">${seg}<text x="60" y="57" text-anchor="middle" font-size="7" fill="var(--text3)">${partial ? '선택 합계' : type === 'out' ? '총 지출' : '총 수입'}</text><text x="60" y="68" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text)">${total.toLocaleString('ko-KR')}</text></svg>
-    <div class="selbar"><span>항목을 눌러 합계에 넣고 빼세요</span><span><button class="chip sm" data-act="catall">전체 선택</button> <button class="chip sm" data-act="catnone">전체 해제</button></span></div>
-    <div class="legend">${rows.map(r => { const off2 = !!ex[r.id]; return `<button class="lg lgb ${off2 ? 'off' : ''}" data-act="cattoggle" data-id="${esc(r.id)}"><span class="chk">${off2 ? '' : '✓'}</span><span class="dot" style="background:${catColor(r.id)}"></span><span class="n">${esc(catIcon(r.id) + ' ' + catName(r.id))}</span><span class="p">${off2 ? '제외' : (total ? (r.v / total * 100).toFixed(0) + '%' : '')}</span><span class="v">${won(r.v)}</span></button>`; }).join('')}
+    <div class="selbar"><span>✓로 합계에 넣고 빼기 · 항목을 누르면 내역 보기</span><span><button class="chip sm" data-act="catall">전체 선택</button> <button class="chip sm" data-act="catnone">전체 해제</button></span></div>
+    <div class="legend">${rows.map(r => { const off2 = !!ex[r.id]; return `<div class="lg lgb ${off2 ? 'off' : ''}"><button class="chkb" data-act="cattoggle" data-id="${esc(r.id)}" aria-label="합계에 넣고 빼기"><span class="chk">${off2 ? '' : '✓'}</span></button><button class="lgmain" data-act="catdetail" data-id="${esc(r.id)}"><span class="dot" style="background:${catColor(r.id)}"></span><span class="n">${esc(catIcon(r.id) + ' ' + catName(r.id))}</span><span class="p">${off2 ? '제외' : (total ? (r.v / total * 100).toFixed(0) + '%' : '')}</span><span class="v">${won(r.v)}</span><span class="go">›</span></button></div>`; }).join('')}
     <div class="lg total"><span class="n">${partial ? `선택 합계 (${inc.length}/${rows.length}개)` : '합계'}</span><span class="v">${won(total)}</span></div>
     ${partial ? `<div class="hint" style="text-align:right">전체 ${won(all)} 중 ${won(all - total)} 제외</div>` : ''}</div></div>`;
   } else donut = '<div class="empty">이 달 기록이 없어요</div>';
@@ -450,6 +453,33 @@ function statsHTML() {
   <div class="card trend"><h2>최근 6개월 추이</h2><svg viewBox="0 0 300 126">${bars}</svg><div class="key"><span><i style="background:var(--in)"></i>수입</span><span><i style="background:var(--out)"></i>지출</span></div></div>
   <div class="card"><h2>결제수단별 (이번 달 지출 · 현재 잔액)</h2>${payRows.map(r => `<div class="lg"><span class="n">${esc(payIcon(r.p) + ' ' + r.p.name)}${r.p.kind === 'card' ? ' <span class="rec-badge">카드</span>' : ''}</span><span class="v">${won(r.spent)}</span><span class="v">${r.bal == null ? '-' : payFmt(r.p, r.bal)}</span></div>`).join('')}</div>
   ${tagRows.length ? `<div class="card"><h2>태그별 지출</h2>${tagRows.map(r => `<div class="lg"><span class="n">#${esc(r.g)}</span><span class="v">${won(r.v)}</span></div>`).join('')}</div>` : ''}`;
+}
+
+/* ---------- 카테고리 상세 내역 (통계에서 카테고리를 누르면) ---------- */
+function catDetailHTML() {
+  const { id, sort } = ui.cd, type = ui.st, ym = ui.ym, mo = +ym.slice(5), word = type === 'out' ? '지출' : '수입';
+  const of = m => monthTx(m).filter(t => t.type === type && t.cat === id);
+  const items = of(ym), total = items.reduce((x, t) => x + t.amount, 0), prevYm = addMonth(ym, -1), prev = of(prevYm).reduce((x, t) => x + t.amount, 0);
+  const monthAll = sums(ym)[type], diff = total - prev, sign = type === 'out' ? '-' : '+';
+  const rowHTML = (t, withDate) => {
+    const dt = new Date(t.date + 'T00:00:00');
+    return `<button class="row" data-act="cdedit" data-id="${t.id}"><span class="mid"><b>${esc(t.memo || catName(t.cat))}${t.rid ? '<span class="rec-badge">반복</span>' : ''}</b><small>${withDate ? `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]}) · ` : ''}${esc(payName(t.pay))}${t.tags.length ? ' · ' + t.tags.map(g => '#' + esc(g)).join(' ') : ''}</small></span><span class="amt ${type}">${sign}${won(t.amount)}</span></button>`;
+  };
+  let list = '';
+  if (!items.length) list = '<div class="empty">이 달 내역이 없어요</div>';
+  else if (sort === 'amount') list = `<div class="group">${items.slice().sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date)).map(t => rowHTML(t, true)).join('')}</div>`;
+  else {
+    const byDate = {}; items.forEach(t => (byDate[t.date] = byDate[t.date] || []).push(t));
+    list = Object.keys(byDate).sort().reverse().map(d => {
+      const arr = byDate[d], dt = new Date(d + 'T00:00:00'), sub = arr.reduce((x, t) => x + t.amount, 0);
+      return `<div class="day"><span>${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]})</span><span>${won(sub)}</span></div><div class="group">${arr.sort((a, b) => (b.u || 0) - (a.u || 0)).map(t => rowHTML(t, false)).join('')}</div>`;
+    }).join('');
+  }
+  return `<h3>${esc(catIcon(id) + ' ' + catName(id))}</h3><div class="muted" style="margin:-6px 0 10px">${ym.slice(0, 4)}년 ${mo}월 ${word} 내역</div>
+  <div class="sum"><div><small>총 ${word}</small><b>${won(total)}</b></div><div><small>건수</small><b>${items.length}건</b></div><div><small>건당 평균</small><b>${items.length ? won(total / items.length) : '-'}</b></div></div>
+  <div class="hint" style="margin:8px 0 12px;line-height:1.7">${mo}월 전체 ${word}의 ${monthAll ? (total / monthAll * 100).toFixed(0) : 0}%${prev || items.length ? ` · ${+prevYm.slice(5)}월(${prev ? won(prev) : '기록 없음'}) 대비 ${diff === 0 ? '변화 없음' : (diff > 0 ? '+' : '-') + won(Math.abs(diff))}` : ''}</div>
+  <div class="seg"><button data-act="cdsort" data-k="date" class="${sort === 'date' ? 'on' : ''}">날짜순</button><button data-act="cdsort" data-k="amount" class="${sort === 'amount' ? 'on' : ''}">금액 큰 순</button></div>
+  ${list}`;
 }
 
 /* ---------- 예산 ---------- */
@@ -523,7 +553,9 @@ function txFormHTML() {
   ${isRec ? '<div class="hint">등록한 날짜가 되면 자동으로 내역에 기록돼요. 이미 기록된 내역은 바뀌지 않아요.</div>' : ''}
   <div class="btnrow">${editing ? '<button class="btn danger" data-act="fdel">삭제</button>' : ''}<button class="btn primary" data-act="fsave">저장</button></div>`;
 }
-function openTxForm(t) { ui.f = newDraft('tx', t); setSheet(txFormHTML()); if (!t) setTimeout(() => { const a = $('f-amount'); a && a.focus(); }, 50); }
+// 입력 창이 열리면 금액 칸에 커서를 둔다. 그 사이 사용자가 다른 칸을 먼저 눌렀다면 건드리지 않는다
+function focusAmount() { setTimeout(() => { const a = $('f-amount'), cur = document.activeElement; if (a && (!cur || cur === document.body || !$('sheetbox').contains(cur))) a.focus(); }, 50); }
+function openTxForm(t) { ui.f = newDraft('tx', t); setSheet(txFormHTML()); if (!t) focusAmount(); }
 function openRecForm(r) { ui.f = newDraft('rec', r); if (!r) ui.f.start = monthOf(todayStr()); setSheet(txFormHTML()); }
 
 function saveForm() {
@@ -602,6 +634,9 @@ document.addEventListener('click', e => {
     case 'prev': ui.ym = addMonth(ui.ym, -1); render(); break;
     case 'next': ui.ym = addMonth(ui.ym, 1); render(); break;
     case 'st': ui.st = d.k; render(); break;
+    case 'catdetail': ui.cd = { id: d.id, sort: 'date' }; setSheet(catDetailHTML()); break;
+    case 'cdsort': ui.cd.sort = d.k; setSheet(catDetailHTML()); break;
+    case 'cdedit': openTxForm(S.tx.find(t => t.id === d.id)); break;
     case 'cattoggle': { const ex = ui.ex[ui.st]; if (ex[d.id]) delete ex[d.id]; else ex[d.id] = 1; render(); break; }
     case 'catall': ui.ex[ui.st] = {}; render(); break;
     case 'catnone': { const ex = {}; monthTx(ui.ym).filter(t => t.type === ui.st).forEach(t => { ex[t.cat] = 1; }); ui.ex[ui.st] = ex; render(); break; }
