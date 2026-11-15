@@ -88,6 +88,11 @@
   .lgb { width:100%; border-bottom:1px solid var(--border); font-size:14px; }
   .chkb { flex:0 0 30px; height:30px; background:none; border:none; display:flex; align-items:center; justify-content:center; margin:-4px 0 -4px -6px; }
   .lgmain { flex:1; min-width:0; display:flex; align-items:center; gap:8px; background:none; border:none; text-align:left; font:inherit; color:inherit; padding:4px 0; }
+  .lgb.sel { background:var(--accent-bg); border-radius:8px; }
+  .cdpanel { margin-top:14px; padding-top:12px; border-top:2px solid var(--accent); }
+  .cdhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .row.off { opacity:.45; } .row.off .mid b { text-decoration:line-through; }
+  .row .chk { flex:0 0 18px; }
   .lgmain .go { color:var(--text3); font-size:18px; line-height:1; }
   .lgb.off { opacity:.5; } .lgb.off .n { text-decoration:line-through; }
   .chk { flex:0 0 18px; height:18px; border-radius:5px; border:1.5px solid var(--accent); background:var(--accent); color:var(--accent-text); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
@@ -357,7 +362,7 @@ function genRecurring() {
 }
 
 /* ---------- 화면 상태 ---------- */
-const ui = { cd: null, ex: { out: {}, in: {} }, tab: 'home', ym: monthOf(todayStr()), q: '', ft: '', fc: '', fp: '', fg: '', fopen: false, st: 'out', f: null };
+const ui = { cd: null, cs: 'date', cx: {}, ex: { out: {}, in: {} }, tab: 'home', ym: monthOf(todayStr()), q: '', ft: '', fc: '', fp: '', fg: '', fopen: false, st: 'out', f: null };
 
 function render() {
   $('nav').innerHTML = [['home', '📒', '내역'], ['stats', '📊', '통계'], ['budget', '🎯', '예산'], ['manage', '⚙️', '관리']]
@@ -430,10 +435,11 @@ function statsHTML() {
     if (total > 0) inc.forEach(r => { const len = r.v / total * C; seg += `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${catColor(r.id)}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; });
     else seg = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--muted-bg)" stroke-width="22"/>`;
     donut = `<div class="donutwrap"><svg viewBox="0 0 120 120">${seg}<text x="60" y="57" text-anchor="middle" font-size="7" fill="var(--text3)">${partial ? '선택 합계' : type === 'out' ? '총 지출' : '총 수입'}</text><text x="60" y="68" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text)">${total.toLocaleString('ko-KR')}</text></svg>
-    <div class="selbar"><span>✓로 합계에 넣고 빼기 · 항목을 누르면 내역 보기</span><span><button class="chip sm" data-act="catall">전체 선택</button> <button class="chip sm" data-act="catnone">전체 해제</button></span></div>
-    <div class="legend">${rows.map(r => { const off2 = !!ex[r.id]; return `<div class="lg lgb ${off2 ? 'off' : ''}"><button class="chkb" data-act="cattoggle" data-id="${esc(r.id)}" aria-label="합계에 넣고 빼기"><span class="chk">${off2 ? '' : '✓'}</span></button><button class="lgmain" data-act="catdetail" data-id="${esc(r.id)}"><span class="dot" style="background:${catColor(r.id)}"></span><span class="n">${esc(catIcon(r.id) + ' ' + catName(r.id))}</span><span class="p">${off2 ? '제외' : (total ? (r.v / total * 100).toFixed(0) + '%' : '')}</span><span class="v">${won(r.v)}</span><span class="go">›</span></button></div>`; }).join('')}
+    <div class="selbar"><span>✓ 합계 포함 · 항목 누르면 내역</span><span><button class="chip sm" data-act="catall">전체 선택</button> <button class="chip sm" data-act="catnone">전체 해제</button></span></div>
+    <div class="legend">${rows.map(r => { const off2 = !!ex[r.id]; return `<div class="lg lgb ${off2 ? 'off' : ''} ${ui.cd === r.id ? 'sel' : ''}"><button class="chkb" data-act="cattoggle" data-id="${esc(r.id)}" aria-label="합계에 넣고 빼기"><span class="chk">${off2 ? '' : '✓'}</span></button><button class="lgmain" data-act="catdetail" data-id="${esc(r.id)}"><span class="dot" style="background:${catColor(r.id)}"></span><span class="n">${esc(catIcon(r.id) + ' ' + catName(r.id))}</span><span class="p">${off2 ? '제외' : (total ? (r.v / total * 100).toFixed(0) + '%' : '')}</span><span class="v">${won(r.v)}</span><span class="go">›</span></button></div>`; }).join('')}
     <div class="lg total"><span class="n">${partial ? `선택 합계 (${inc.length}/${rows.length}개)` : '합계'}</span><span class="v">${won(total)}</span></div>
-    ${partial ? `<div class="hint" style="text-align:right">전체 ${won(all)} 중 ${won(all - total)} 제외</div>` : ''}</div></div>`;
+    ${partial ? `<div class="hint" style="text-align:right">전체 ${won(all)} 중 ${won(all - total)} 제외</div>` : ''}
+    ${catPanelHTML()}</div></div>`;
   } else donut = '<div class="empty">이 달 기록이 없어요</div>';
 
   const months = []; for (let i = 5; i >= 0; i--) months.push(addMonth(ui.ym, -i));
@@ -455,31 +461,33 @@ function statsHTML() {
   ${tagRows.length ? `<div class="card"><h2>태그별 지출</h2>${tagRows.map(r => `<div class="lg"><span class="n">#${esc(r.g)}</span><span class="v">${won(r.v)}</span></div>`).join('')}</div>` : ''}`;
 }
 
-/* ---------- 카테고리 상세 내역 (통계에서 카테고리를 누르면) ---------- */
-function catDetailHTML() {
-  const { id, sort } = ui.cd, type = ui.st, ym = ui.ym, mo = +ym.slice(5), word = type === 'out' ? '지출' : '수입';
-  const of = m => monthTx(m).filter(t => t.type === type && t.cat === id);
-  const items = of(ym), total = items.reduce((x, t) => x + t.amount, 0), prevYm = addMonth(ym, -1), prev = of(prevYm).reduce((x, t) => x + t.amount, 0);
-  const monthAll = sums(ym)[type], diff = total - prev, sign = type === 'out' ? '-' : '+';
+/* ---------- 카테고리 내역 (통계에서 카테고리를 누르면 합계 아래에 펼쳐짐) ---------- */
+function catPanelHTML() {
+  if (!ui.cd) return '';
+  const id = ui.cd, type = ui.st, ym = ui.ym, mo = +ym.slice(5), word = type === 'out' ? '지출' : '수입', sign = type === 'out' ? '-' : '+';
+  const items = monthTx(ym).filter(t => t.type === type && t.cat === id);
+  if (!items.length) return '';
+  const inc = items.filter(t => !ui.cx[t.id]), sel = inc.reduce((x, t) => x + t.amount, 0), partial = inc.length !== items.length;
   const rowHTML = (t, withDate) => {
-    const dt = new Date(t.date + 'T00:00:00');
-    return `<button class="row" data-act="cdedit" data-id="${t.id}"><span class="mid"><b>${esc(t.memo || catName(t.cat))}${t.rid ? '<span class="rec-badge">반복</span>' : ''}</b><small>${withDate ? `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]}) · ` : ''}${esc(payName(t.pay))}${t.tags.length ? ' · ' + t.tags.map(g => '#' + esc(g)).join(' ') : ''}</small></span><span class="amt ${type}">${sign}${won(t.amount)}</span></button>`;
+    const dt = new Date(t.date + 'T00:00:00'), off = !!ui.cx[t.id];
+    return `<button class="row ${off ? 'off' : ''}" data-act="cdtoggle" data-id="${t.id}"><span class="chk">${off ? '' : '✓'}</span><span class="mid"><b>${esc(t.memo || catName(t.cat))}${t.rid ? '<span class="rec-badge">반복</span>' : ''}</b><small>${withDate ? `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]}) · ` : ''}${esc(payName(t.pay))}${t.tags.length ? ' · ' + t.tags.map(g => '#' + esc(g)).join(' ') : ''}</small></span><span class="amt ${type}">${sign}${won(t.amount)}</span></button>`;
   };
-  let list = '';
-  if (!items.length) list = '<div class="empty">이 달 내역이 없어요</div>';
-  else if (sort === 'amount') list = `<div class="group">${items.slice().sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date)).map(t => rowHTML(t, true)).join('')}</div>`;
+  let list;
+  if (ui.cs === 'amount') list = `<div class="group">${items.slice().sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date)).map(t => rowHTML(t, true)).join('')}</div>`;
   else {
     const byDate = {}; items.forEach(t => (byDate[t.date] = byDate[t.date] || []).push(t));
     list = Object.keys(byDate).sort().reverse().map(d => {
-      const arr = byDate[d], dt = new Date(d + 'T00:00:00'), sub = arr.reduce((x, t) => x + t.amount, 0);
-      return `<div class="day"><span>${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]})</span><span>${won(sub)}</span></div><div class="group">${arr.sort((a, b) => (b.u || 0) - (a.u || 0)).map(t => rowHTML(t, false)).join('')}</div>`;
+      const arr = byDate[d], dt = new Date(d + 'T00:00:00');
+      return `<div class="day"><span>${dt.getMonth() + 1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]})</span><span>${won(arr.reduce((x, t) => x + t.amount, 0))}</span></div><div class="group">${arr.sort((a, b) => (b.u || 0) - (a.u || 0)).map(t => rowHTML(t, false)).join('')}</div>`;
     }).join('');
   }
-  return `<h3>${esc(catIcon(id) + ' ' + catName(id))}</h3><div class="muted" style="margin:-6px 0 10px">${ym.slice(0, 4)}년 ${mo}월 ${word} 내역</div>
-  <div class="sum"><div><small>총 ${word}</small><b>${won(total)}</b></div><div><small>건수</small><b>${items.length}건</b></div><div><small>건당 평균</small><b>${items.length ? won(total / items.length) : '-'}</b></div></div>
-  <div class="hint" style="margin:8px 0 12px;line-height:1.7">${mo}월 전체 ${word}의 ${monthAll ? (total / monthAll * 100).toFixed(0) : 0}%${prev || items.length ? ` · ${+prevYm.slice(5)}월(${prev ? won(prev) : '기록 없음'}) 대비 ${diff === 0 ? '변화 없음' : (diff > 0 ? '+' : '-') + won(Math.abs(diff))}` : ''}</div>
-  <div class="seg"><button data-act="cdsort" data-k="date" class="${sort === 'date' ? 'on' : ''}">날짜순</button><button data-act="cdsort" data-k="amount" class="${sort === 'amount' ? 'on' : ''}">금액 큰 순</button></div>
-  ${list}`;
+  return `<div class="cdpanel" id="cdpanel">
+    <div class="cdhead"><b>${esc(catIcon(id) + ' ' + catName(id))} · ${mo}월 ${word} 내역</b><button class="chip sm" data-act="cdclose">닫기</button></div>
+    <div class="lg total"><span class="n">${partial ? `선택한 내역 합계 (${inc.length}/${items.length}건)` : `내역 합계 (${items.length}건)`}</span><span class="v">${won(sel)}</span></div>
+    <div class="hint" style="text-align:right;margin:0 0 6px">${inc.length ? `평균 ${won(sel / inc.length)}` : '선택된 내역이 없어요'}${partial ? ` · 전체 ${won(items.reduce((x, t) => x + t.amount, 0))} 중 ${won(items.reduce((x, t) => x + t.amount, 0) - sel)} 제외` : ''}</div>
+    <div class="selbar"><span>내역을 눌러 합계에 넣고 빼기</span><span><button class="chip sm" data-act="cdall">전체 선택</button> <button class="chip sm" data-act="cdnone">전체 해제</button></span></div>
+    <div class="seg" style="margin:8px 0"><button data-act="cdsort" data-k="date" class="${ui.cs === 'date' ? 'on' : ''}">날짜순</button><button data-act="cdsort" data-k="amount" class="${ui.cs === 'amount' ? 'on' : ''}">금액 높은 순</button></div>
+    ${list}</div>`;
 }
 
 /* ---------- 예산 ---------- */
@@ -633,10 +641,13 @@ document.addEventListener('click', e => {
     case 'tab': ui.tab = d.k; render(); window.scrollTo(0, 0); break;
     case 'prev': ui.ym = addMonth(ui.ym, -1); render(); break;
     case 'next': ui.ym = addMonth(ui.ym, 1); render(); break;
-    case 'st': ui.st = d.k; render(); break;
-    case 'catdetail': ui.cd = { id: d.id, sort: 'date' }; setSheet(catDetailHTML()); break;
-    case 'cdsort': ui.cd.sort = d.k; setSheet(catDetailHTML()); break;
-    case 'cdedit': openTxForm(S.tx.find(t => t.id === d.id)); break;
+    case 'st': ui.st = d.k; ui.cd = null; render(); break;
+    case 'catdetail': if (ui.cd === d.id) ui.cd = null; else { ui.cd = d.id; ui.cx = {}; } render(); if (ui.cd) { const pn = $('cdpanel'); pn && pn.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } break;
+    case 'cdclose': ui.cd = null; render(); break;
+    case 'cdsort': ui.cs = d.k; render(); break;
+    case 'cdtoggle': if (ui.cx[d.id]) delete ui.cx[d.id]; else ui.cx[d.id] = 1; render(); break;
+    case 'cdall': ui.cx = {}; render(); break;
+    case 'cdnone': ui.cx = {}; monthTx(ui.ym).filter(t => t.type === ui.st && t.cat === ui.cd).forEach(t => { ui.cx[t.id] = 1; }); render(); break;
     case 'cattoggle': { const ex = ui.ex[ui.st]; if (ex[d.id]) delete ex[d.id]; else ex[d.id] = 1; render(); break; }
     case 'catall': ui.ex[ui.st] = {}; render(); break;
     case 'catnone': { const ex = {}; monthTx(ui.ym).filter(t => t.type === ui.st).forEach(t => { ex[t.cat] = 1; }); ui.ex[ui.st] = ex; render(); break; }
