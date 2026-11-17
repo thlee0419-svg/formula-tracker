@@ -213,6 +213,10 @@
   .wbar { position: relative; height: 6px; border-radius: 3px; background: var(--surface-muted); margin: 8px 0 4px; }
   .wbar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
   .wbar b { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--text); border-radius: 1px; }
+  .sync-badge { margin-left: auto; margin-right: 8px; align-self: center; font-size: 12px; padding: 5px 10px; border-radius: 99px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; white-space: nowrap; font-family: inherit; }
+  .sync-badge.ok { color: #1a8f66; } .sync-badge.saving { color: #b97d00; } .sync-badge.error { color: var(--up); border-color: var(--up); font-weight: 600; } .sync-badge.none { color: var(--text-muted); }
+  .conflict-bar { background: rgba(217,59,59,.1); border: 1px solid var(--up); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .75rem; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .conflict-bar .btn { padding: 6px 12px; flex-shrink: 0; }
   .dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .mini { padding: 4px 9px; font-size: 12px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; cursor: pointer; white-space: nowrap; }
   .mini:hover { background: var(--surface-muted); }
@@ -241,7 +245,7 @@
 </head>
 <body>
 <div class="container">
-  <div class="top-row"><h1>📈 내 주식 계좌 대시보드</h1><button class="gear" onclick="document.getElementById('toolbar').classList.toggle('open')" aria-label="설정">⚙️</button></div>
+  <div class="top-row"><h1>📈 내 주식 계좌 대시보드</h1><button class="sync-badge none" id="syncBadge" onclick="syncBadgeTap()" aria-label="저장 상태"></button><button class="gear" onclick="document.getElementById('toolbar').classList.toggle('open')" aria-label="설정">⚙️</button></div>
   <p class="subtitle">NH · 삼성 · 미래에셋 · 신한 4개 계좌의 성과를 한눈에 확인하세요</p>
 
   <div class="banner" id="banner">
@@ -262,10 +266,13 @@
       <button class="btn ghost" onclick="exportJson()">내보내기</button>
       <button class="btn ghost" onclick="document.getElementById('importFile').click()">가져오기</button>
       <button class="btn ghost" onclick="copySyncLink()" id="copyLinkBtn">연동 링크 복사</button>
+      <button class="btn ghost" onclick="openBackups()">자동 백업</button>
       <button class="btn ghost" onclick="resetUrl()">시트 연동 설정</button>
       <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importJson(this)">
     </div>
   </div>
+
+  <div class="conflict-bar" id="conflictBar" style="display:none">⚠️ 시트와 이 기기의 데이터가 달라서 저장을 멈췄어요. <button class="btn" onclick="showConflict()">확인하기</button></div>
 
   <div class="quote-bar">
     <span id="quoteStatus">시세: 시트 연동 후 앱을 열 때 자동 갱신돼요</span>
@@ -549,39 +556,218 @@ const cls = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
 const signKRW = v => (v > 0 ? '+' : v < 0 ? '-' : '') + Math.abs(Math.round(v)).toLocaleString('ko-KR') + '원';
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-/* ---------- 저장 / 동기화 ---------- */
+/* ---------- 저장 / 동기화 ----------
+ * 이 기기에는 바로 저장하고, 시트에는 저장 후 다시 읽어 확인합니다(실패하면 자동 재시도).
+ * state.rev = 마지막 수정 시각, LS_SYNC = 시트에 저장이 확인된 마지막 rev.
+ * 시트로 못 올린 기록(rev > LS_SYNC)은 불러오기에서 덮어쓰지 않고, 다른 기기가 먼저 저장했으면 충돌로 보고 선택하게 합니다. */
+const LS_SYNC = 'stockDashboardSyncRev', LS_BACKUPS = 'stockDashboardBackups';
+let syncReady = false, saving = false, saveAgain = false, retryCount = 0, retryTimer = null, lastVerified = 0, lastReconcile = 0, conflict = null;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 function setSync(msg, err) { const el = document.getElementById('sync'); el.textContent = msg; el.className = 'sync' + (err ? ' error' : ''); }
+const syncRev = () => { const v = localStorage.getItem(LS_SYNC); return v === null ? NaN : Number(v); };
+const setSyncRev = r => { try { localStorage.setItem(LS_SYNC, String(r)); } catch (e) {} };
+const isDirty = () => !isNaN(syncRev()) && (Number(state.rev) || 0) > syncRev();
+const hasData = st => ['holdings', 'realized', 'journal', 'trades', 'plans', 'flows', 'transfers'].some(k => (st[k] || []).length);
+
+function updateBadge() {
+  const el = document.getElementById('syncBadge'); if (!el) return;
+  let kind = 'ok', text = '☁️ 저장됨';
+  if (!SCRIPT_URL) { kind = 'none'; text = '☁️ 연동 전'; }
+  else if (conflict) { kind = 'error'; text = '⚠️ 확인 필요'; }
+  else if (!syncReady) { kind = 'saving'; text = '⏳ 불러오는 중'; }
+  else if (saving) { kind = 'saving'; text = '⏳ 저장 중'; }
+  else if (isDirty()) { kind = retryCount > 0 ? 'error' : 'saving'; text = retryCount > 0 ? '⚠️ 저장 안 됨' : '⏳ 저장 대기'; }
+  el.className = 'sync-badge ' + kind; el.textContent = text;
+}
 
 function persist() {
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
-  if (!SCRIPT_URL) return;
-  clearTimeout(saveTimer);
-  setSync('저장 중...');
-  saveTimer = setTimeout(async () => {
-    try {
-      await fetch(SCRIPT_URL, { method:'POST', mode:'no-cors', body: JSON.stringify({ action:'save', state }) });
-      setSync('시트에 저장됨 ✓'); setTimeout(() => setSync(''), 2000);
-    } catch (e) { setSync('시트 저장 실패 (이 브라우저에는 저장됨)', true); }
-  }, 600);
+  state.rev = Math.max(Date.now(), (Number(state.rev) || 0) + 1);
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) { setSync('이 기기의 저장 공간이 부족해요. 내보내기로 백업해 주세요.', true); }
+  if (!SCRIPT_URL || !syncReady) { updateBadge(); return; }          // 불러오기가 끝나기 전에는 시트로 보내지 않음
+  scheduleSave(400);
 }
+function syncBadgeTap() {
+  if (conflict) { showConflict(); return; }
+  if (!SCRIPT_URL) { resetUrl(); return; }
+  if (isDirty()) { retryCount = 0; scheduleSave(0); setSync('지금 시트에 저장해 볼게요...'); }
+  else alert('시트에 저장돼 있어요 ✓');
+}
+function scheduleSave(delay) { clearTimeout(saveTimer); updateBadge(); saveTimer = setTimeout(pushState, delay); }
+
+async function fetchSheetState() {
+  const res = await fetch(`${SCRIPT_URL}?action=load&t=${Date.now()}`);
+  const data = await res.json();
+  return data && data.state ? data.state : null;
+}
+async function verifySaved(rev) { await sleep(1200); const r = await fetchSheetState(); return !!r && Number(r.rev) === rev; }
+
+async function pushState() {
+  if (!SCRIPT_URL || !syncReady || conflict) return;
+  if (isNaN(syncRev())) return;                                       // 아직 시트와 대조하기 전
+  if (saving) { saveAgain = true; return; }
+  if (!isDirty()) { updateBadge(); return; }
+  saving = true; updateBadge();
+  const rev = Number(state.rev) || 0;
+  try {
+    if (Date.now() - lastVerified > 15000) {                           // 저장 직전: 그 사이 다른 기기가 시트를 바꿨는지 확인
+      const remote = await fetchSheetState(), srev = Number(remote && remote.rev) || 0;
+      if (remote && srev === rev) { setSyncRev(rev); lastVerified = Date.now(); retryCount = 0; return; }
+      if (remote && srev > syncRev()) { openConflict(remote); return; }
+    }
+    await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'save', state }) });
+    let ok = await verifySaved(rev);
+    if (!ok) { await sleep(2500); ok = await verifySaved(rev); }
+    if (!ok) throw new Error('not verified');
+    setSyncRev(rev); lastVerified = Date.now(); retryCount = 0;
+    setSync('시트에 저장됨 ✓'); setTimeout(() => setSync(''), 2500);
+  } catch (e) {
+    retryCount++;
+    setSync('시트 저장을 확인하지 못했어요. 자동으로 다시 시도해요 (이 기기에는 저장돼 있어요).', true);
+    clearTimeout(retryTimer); retryTimer = setTimeout(pushState, Math.min(60000, 3000 * Math.pow(2, retryCount - 1)));
+  } finally {
+    saving = false; updateBadge();
+    if ((saveAgain || (isDirty() && retryCount === 0)) && !conflict) { saveAgain = false; scheduleSave(200); }
+  }
+}
+
+/* 시트 ↔ 이 기기 대조 */
+function localHasExtra(local, remote) {                              // 이 기기에만 있고 시트에는 없는 기록이 있는지
+  const idset = arr => new Set((arr || []).map(x => x.id));
+  for (const k of ['journal', 'trades', 'realized', 'flows', 'transfers', 'plans']) { const r = idset(remote[k]); if ((local[k] || []).some(x => !r.has(x.id))) return true; }
+  const rh = new Map((remote.holdings || []).map(h => [h.id, h]));
+  return (local.holdings || []).some(h => { const o = rh.get(h.id); return !o || Math.abs(o.qty - h.qty) > 1e-9 || Math.abs(o.avg - h.avg) > 1e-6; });
+}
+function adoptRemote(remote) {
+  state = { ...state, ...remote }; normalize(); state.rev = Number(remote.rev) || 0;
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  setSyncRev(state.rev);
+}
+async function reconcile() {
+  const remote = await fetchSheetState(); lastReconcile = Date.now();
+  const lrev = Number(state.rev) || 0, sync = syncRev();
+  if (!remote) {                                                      // 시트가 비어 있으면 이 기기 데이터를 올림
+    if (hasData(state)) { if (isNaN(sync)) setSyncRev(0); state.rev = Math.max(Date.now(), lrev + 1); try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+    else setSyncRev(0);
+    return;
+  }
+  const srev = Number(remote.rev) || 0;
+  lastVerified = Date.now();
+  if (srev > 0 && srev === lrev) { setSyncRev(srev); return; }        // 이미 같은 상태
+  if (isNaN(sync)) {                                                  // 이 방식으로 처음 불러오는 기기: 이 기기에만 있는 기록이 있으면 덮어쓰지 않고 선택
+    if (hasData(state) && localHasExtra(state, remote)) { openConflict(remote); return; }
+    adoptRemote(remote); return;
+  }
+  if (!isDirty()) { adoptRemote(remote); return; }                    // 보낼 변경이 없으면 시트 기준
+  if (srev <= sync) return;                                           // 시트는 그대로 → 이 기기의 변경을 올림(호출한 쪽이 저장 예약)
+  openConflict(remote);                                               // 양쪽이 모두 바뀜
+}
+async function resumeSync() {                                         // 앱이 다시 보일 때: 다른 기기의 변경을 가져오거나 못 올린 변경을 올림
+  if (!SCRIPT_URL || !syncReady || conflict || saving || Date.now() - lastReconcile < 20000) return;
+  try { const before = state.rev; await reconcile(); if (state.rev !== before) render(); if (isDirty() && !conflict) scheduleSave(100); } catch (e) {}
+  updateBadge();
+}
+function flushNow() {                                                 // 앱을 닫거나 다른 앱으로 넘어갈 때 대기 중인 저장을 한 번 더 보냄
+  if (!SCRIPT_URL || !syncReady || conflict || !isDirty()) return;
+  if (Date.now() - Math.max(lastVerified, lastReconcile) > 5 * 60 * 1000) return;   // 시트 확인이 오래됐으면 덮어쓰기 위험이 있어 보내지 않음(다음 실행 때 확인 후 저장)
+  try { navigator.sendBeacon && navigator.sendBeacon(SCRIPT_URL, new Blob([JSON.stringify({ action: 'save', state })], { type: 'text/plain;charset=UTF-8' })); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushNow(); else resumeSync(); });
+window.addEventListener('pagehide', flushNow);
 
 async function load() {
   try { const local = JSON.parse(localStorage.getItem(LS_KEY)); if (local) state = { ...state, ...local }; } catch (e) {}
-  normalize();
-  render();
+  normalize(); syncReady = !SCRIPT_URL;
+  render(); updateBadge();
   if (!SCRIPT_URL) { document.getElementById('banner').classList.add('visible'); return; }
   setSync('불러오는 중...');
   let sheetOk = false;
-  try {
-    const res = await fetch(`${SCRIPT_URL}?action=load`);
-    const data = await res.json();
-    if (data && data.state) { state = { ...state, ...data.state }; localStorage.setItem(LS_KEY, JSON.stringify(state)); setSync(''); normalize(); }
-    else if (state.holdings.length || state.realized.length || state.flows.length) persist(); // 시트가 비어 있으면 이 브라우저의 데이터를 올림
-    else setSync('');
-    sheetOk = true;
-  } catch (e) { setSync('시트 불러오기 실패. 이 브라우저의 저장본을 표시합니다.', true); }
-  render();
-  if (sheetOk) refreshQuotes(true);   // 앱을 열 때 현재가 자동 갱신
+  try { await reconcile(); sheetOk = true; setSync(''); }
+  catch (e) { lastVerified = 0; setSync('시트 불러오기 실패. 이 기기의 저장본을 보여 줘요 (시트를 확인하기 전에는 덮어쓰지 않아요).', true); retryCount = 1; clearTimeout(retryTimer); retryTimer = setTimeout(resumeAfterFail, 5000); }
+  syncReady = true;
+  render(); updateBadge();
+  if (isDirty() && !conflict) scheduleSave(200);                       // 이전에 못 올린 기록 올리기
+  if (sheetOk && !conflict) refreshQuotes(true);                       // 앱을 열 때 현재가 자동 갱신
+}
+async function resumeAfterFail() {                                    // 불러오기에 실패했을 때: 연결이 되면 다시 대조
+  try { await reconcile(); retryCount = 0; setSync(''); render(); if (isDirty() && !conflict) scheduleSave(100); }
+  catch (e) { clearTimeout(retryTimer); retryTimer = setTimeout(resumeAfterFail, 15000); }
+  updateBadge();
+}
+
+/* 충돌: 시트와 이 기기가 서로 다른 변경을 가진 경우 */
+const countsOf = st => ({ '보유 종목': (st.holdings || []).length, '매매 일지': (st.journal || []).length, '청산 기록': (st.trades || []).length, '실현손익': (st.realized || []).length, '관심 종목': (st.plans || []).length });
+function onlyIn(a, b) {                                               // a에만 있는 기록 목록(최대 8개)
+  const out = [], add = (label, arr, brr, fmt) => { const ids = new Set((brr || []).map(x => x.id)); (arr || []).filter(x => !ids.has(x.id)).forEach(x => out.push(`${label} · ${fmt(x)}`)); };
+  add('일지', a.journal, b.journal, x => `${x.name || '메모'}${{ buy: ' 매수', sell: ' 매도' }[x.type] || ''} (${x.date})`);
+  add('청산', a.trades, b.trades, x => `${x.name} (${x.date})`);
+  add('실현손익', a.realized, b.realized, x => `${x.name} (${x.date})`);
+  add('입출금', a.flows, b.flows, x => `${x.type === 'in' ? '입금' : '출금'} (${x.date})`);
+  add('이체', a.transfers, b.transfers, x => `(${x.date})`);
+  add('관심 종목', a.plans, b.plans, x => x.name);
+  const bh = new Map((b.holdings || []).map(h => [h.id, h]));
+  (a.holdings || []).forEach(h => { const o = bh.get(h.id); if (!o) out.push(`보유 · ${h.name} 추가`); else if (Math.abs(o.qty - h.qty) > 1e-9) out.push(`보유 · ${h.name} 수량 ${o.qty}→${h.qty}`); });
+  return out;
+}
+function downloadState(obj, label) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
+  a.download = `stocks-${label}-${todayStr()}.json`; a.click();
+}
+function openConflict(remote) {
+  conflict = remote; clearTimeout(saveTimer); clearTimeout(retryTimer); updateBadge();
+  document.getElementById('conflictBar').style.display = '';
+  showConflict();
+}
+function showConflict() {
+  if (!conflict) return;
+  const L = countsOf(state), R = countsOf(conflict), mine = onlyIn(state, conflict), theirs = onlyIn(conflict, state);
+  const list = (arr, empty) => arr.length ? `<ul style="margin:4px 0 8px 1.1rem;font-size:13px;line-height:1.6">${arr.slice(0, 8).map(x => `<li>${esc(x)}</li>`).join('')}${arr.length > 8 ? `<li>…외 ${arr.length - 8}건</li>` : ''}</ul>` : `<div style="font-size:13px;color:var(--text-muted);margin:4px 0 8px">${empty}</div>`;
+  openDlg(`<h3>시트와 이 기기의 데이터가 달라요</h3>
+    <div class="note" style="margin:0 0 .75rem">다른 기기에서 먼저 저장했거나, 이 기기의 기록이 시트에 올라가지 못했을 수 있어요. 어느 쪽을 쓸지 고르면 선택하지 않은 쪽은 자동 백업으로 보관돼요. 고를 때까지 시트에는 저장하지 않아요.</div>
+    <table style="margin-bottom:.5rem"><thead><tr><th style="text-align:left">항목</th><th>이 기기</th><th>시트</th></tr></thead><tbody>${Object.keys(L).map(k => `<tr><td style="text-align:left">${k}</td><td>${L[k]}</td><td>${R[k]}</td></tr>`).join('')}</tbody></table>
+    <b style="font-size:13px">이 기기에만 있는 기록</b>${list(mine, '없음')}
+    <b style="font-size:13px">시트에만 있는 기록</b>${list(theirs, '없음')}
+    <div class="dlg-actions" style="flex-wrap:wrap;justify-content:flex-start">
+      <button class="btn" onclick="resolveConflict('local')">이 기기 데이터 사용</button>
+      <button class="btn" onclick="resolveConflict('remote')">시트 데이터 사용</button>
+    </div>
+    <div class="dlg-actions" style="flex-wrap:wrap;justify-content:flex-start">
+      <button class="btn ghost" onclick="downloadState(state, '이기기')">이 기기 백업 받기</button>
+      <button class="btn ghost" onclick="downloadState(conflict, '시트')">시트 백업 받기</button>
+      <button class="btn ghost" onclick="closeDlg()">나중에</button>
+    </div>`);
+}
+function resolveConflict(choice) {
+  if (!conflict) return;
+  const remote = conflict;
+  if (choice === 'remote') { addBackup('시트 데이터를 선택하기 전의 이 기기 데이터', state); adoptRemote(remote); }
+  else { addBackup('이 기기 데이터를 선택하기 전의 시트 데이터', remote); setSyncRev(Number(remote.rev) || 0); state.rev = Math.max(Date.now(), (Number(remote.rev) || 0) + 1, (Number(state.rev) || 0) + 1); try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+  conflict = null; lastVerified = 0; retryCount = 0;
+  document.getElementById('conflictBar').style.display = 'none'; closeDlg();
+  render(); updateBadge(); if (isDirty()) scheduleSave(100);
+}
+
+/* 자동 백업 (최근 3개) */
+function addBackup(reason, st) {
+  const item = { at: Date.now(), reason, state: st };
+  try { const list = JSON.parse(localStorage.getItem(LS_BACKUPS) || '[]'); list.unshift(item); localStorage.setItem(LS_BACKUPS, JSON.stringify(list.slice(0, 3))); }
+  catch (e) { try { localStorage.setItem(LS_BACKUPS, JSON.stringify([item])); } catch (e2) {} }
+}
+function openBackups() {
+  let list = []; try { list = JSON.parse(localStorage.getItem(LS_BACKUPS) || '[]'); } catch (e) {}
+  const fmt = t => { const d = new Date(t); return `${localDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  openDlg(`<h3>자동 백업</h3>
+    <div class="note" style="margin:0 0 .75rem">시트와 이 기기의 데이터를 바꾸기 전에 남겨 둔 백업이에요(최근 3개). 이 기기에만 보관돼요.</div>
+    ${list.length ? list.map((b, i) => { const c = countsOf(b.state); return `<div style="border:0.5px solid var(--border);border-radius:10px;padding:.7rem .8rem;margin-bottom:8px"><b style="font-size:13px">${fmt(b.at)}</b><div style="font-size:12.5px;color:var(--text-secondary);margin:2px 0 6px">${esc(b.reason)}<br>보유 ${c['보유 종목']} · 일지 ${c['매매 일지']} · 청산 ${c['청산 기록']} · 실현손익 ${c['실현손익']}</div>
+      <button class="mini" onclick="downloadBackup(${i})">내려받기</button> <button class="mini" onclick="restoreBackup(${i})">이 백업으로 복원</button></div>`; }).join('') : '<div class="empty">아직 백업이 없어요.</div>'}
+    <div class="dlg-actions"><button class="btn ghost" onclick="closeDlg()">닫기</button></div>`);
+}
+function downloadBackup(i) { try { const b = JSON.parse(localStorage.getItem(LS_BACKUPS) || '[]')[i]; if (b) downloadState(b.state, '백업'); } catch (e) {} }
+function restoreBackup(i) {
+  let b; try { b = JSON.parse(localStorage.getItem(LS_BACKUPS) || '[]')[i]; } catch (e) {}
+  if (!b || !confirm('이 백업으로 복원할까요? 현재 데이터는 새 백업으로 보관돼요.')) return;
+  addBackup('백업 복원 전 데이터', state);
+  state = { ...state, ...b.state }; normalize(); closeDlg(); persist(); render();
 }
 
 /* ---------- 현재가 자동 갱신 (구글 파이낸스, 약 15~20분 지연) ---------- */
@@ -640,6 +826,7 @@ function saveUrl() {
   const m = url.match(/#sync=(.+)$/);           // 연동 링크 전체를 붙여넣어도 됨
   if (m) { try { url = decodeURIComponent(m[1]); } catch (e) {} }
   if (!url.startsWith('https://script.google.com')) { alert('올바른 URL이 아닙니다.'); return; }
+  if (url !== SCRIPT_URL) localStorage.removeItem(LS_SYNC);   // 다른 시트면 처음부터 대조
   SCRIPT_URL = url; localStorage.setItem(LS_URL, url);
   document.getElementById('banner').classList.remove('visible');
   load();
@@ -650,7 +837,7 @@ function applySyncFromHash() {
   if (!m) return;
   try {
     const url = decodeURIComponent(m[1]);
-    if (url.startsWith('https://script.google.com/')) { SCRIPT_URL = url; localStorage.setItem(LS_URL, url); }
+    if (url.startsWith('https://script.google.com/')) { if (url !== SCRIPT_URL) localStorage.removeItem(LS_SYNC); SCRIPT_URL = url; localStorage.setItem(LS_URL, url); }
   } catch (e) {}
   history.replaceState(null, '', location.pathname + location.search);
 }
@@ -665,7 +852,7 @@ function resetUrl() { document.getElementById('urlInput').value = SCRIPT_URL; do
 function exportJson() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type:'application/json' }));
-  a.download = `stocks-${new Date().toISOString().slice(0,10)}.json`; a.click();
+  a.download = `stocks-${todayStr()}.json`; a.click();
 }
 function importJson(input) {
   const f = input.files[0]; if (!f) return;
@@ -809,7 +996,7 @@ function render() {
 
   const fill = (id) => { const s = document.getElementById(id); if (!s.options.length) s.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name} (${a.role})</option>`).join(''); };
   fill('fAcct'); fill('rAcct'); fill('cAcct');
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayStr();
   ['rDate','cDate','tDate'].forEach(i => { const e = document.getElementById(i); if (!e.value) e.value = today; });
 
   document.getElementById('summary').innerHTML = `
@@ -955,11 +1142,14 @@ function renderFlows() {
 }
 
 /* ---------- 월별 누적 성과 ---------- */
-const curMonth = () => new Date().toISOString().slice(0, 7);
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const pad2 = n => String(n).padStart(2, '0');
+const localDate = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;   // 이 기기의 시간대(한국 시간) 기준 날짜
+const curMonth = () => localDate().slice(0, 7);
+const todayStr = () => localDate();
 
 // 이번 달 스냅샷을 현재 보유 현황으로 자동 갱신 (지난달 기록은 건드리지 않음)
 function syncSnapshot() {
+  if (!syncReady) return;                                    // 시트와 대조하기 전에는 기록·저장하지 않음
   if (!state.holdings.length && !Object.values(state.cash).some(v => Number(v) > 0)) return;
   const { per } = compute();
   const accounts = {};
@@ -1014,7 +1204,7 @@ function trendSeries() {
   let rows = src.map(x => ({ label: x.label, by: Object.fromEntries(ACCOUNTS.map(a => [a.id, accTotal(x, a.id)])), total: ids.reduce((sum, id) => sum + accTotal(x, id), 0) }));
   rows.forEach((r, i) => { r.delta = i ? r.total - rows[i - 1].total : null; r.pct = i && rows[i - 1].total ? r.delta / rows[i - 1].total * 100 : null; });
   if (tView === 'daily' && tRange > 0 && rows.length) {      // 최근 N일만
-    const cut = new Date(Date.now() - tRange * 86400000).toISOString().slice(0, 10);
+    const cut = localDate(new Date(Date.now() - tRange * 86400000));
     rows = rows.filter(r => r.label >= cut);
   }
   return rows;
