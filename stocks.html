@@ -1353,7 +1353,7 @@ function buildStages(entry, s2, s3, splitText) {                  // 분할 매�
 const KIND = { trade: { pre: 'pt', label: '트레이딩' }, invest: { pre: 'pi', label: '투자' } };
 const kindOf = acct => acct === 'mirae' ? 'trade' : 'invest';
 const INVEST_ACCTS = ACCOUNTS.filter(a => a.id !== 'mirae');
-const SETUP_NAMES = { trade: ['눌림목', '이평선 지지', '박스권 돌파', '신고가 돌파', '과대 낙폭 되돌림', '기타'], invest: ['장기 매수', '분할 매수', '배당·가치', '기타'] };
+const SETUP_NAMES = { trade: ['눌림목', '이평선 지지', '박스권 돌파', '신고가 돌파', '과대 낙폭 되돌림', '기타'], invest: ['장기 매수', '분할 매수', '배당·가치', '과대 낙폭 되돌림', '기타'] };
 const planFilter = { trade: 'active', invest: 'active' }, editing = { trade: null, invest: null };
 let ivTab = 'plans', ivAcct = 'all';
 
