@@ -47,6 +47,8 @@
   .date-row input { width:68px; text-align:center; padding:12px 4px; }
   .date-row span { color:var(--text2); }
   .date-row[hidden] { display:none; }
+  .warn { background:var(--amber-bg); color:var(--amber); border:1px solid var(--amber); border-radius:12px; padding:12px 14px; margin-bottom:1rem; font-size:14px; line-height:1.55; }
+  .warn .row button { font-size:14px; padding:8px 14px; }
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:10; }
   .overlay[hidden] { display:none; }
   .sheet { max-height:92vh; overflow-y:auto; background:var(--surface); width:100%; max-width:680px; border-radius:16px 16px 0 0; padding:1.2rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
@@ -94,6 +96,8 @@
     <h1>🧊 우리집 냉장고</h1>
     <span><button class="icon-btn" id="statsBtn" aria-label="버린 음식 통계">📊</button><button class="icon-btn" id="settingsBtn" aria-label="설정">⚙️</button></span>
   </header>
+
+  <div class="warn" id="saveWarn" hidden></div>
 
   <!-- 설정 -->
   <div class="card setup" id="setup" hidden>
@@ -326,6 +330,8 @@ function setStatus(t) { $('status').textContent = t; }
 
 async function load() {
   if (!URL_) return;
+  // 저장되지 않은 변경이 있는데 서버 목록으로 덮어쓰면 그 변경이 사라지므로 동기화를 잠시 멈춘다
+  if (failedOps.length) { setStatus('⚠️ 저장 안 된 변경이 있어 동기화를 멈췄어요.'); return; }
   try {
     const res = await fetch(`${URL_}?t=${Date.now()}`);
     const data = await res.json();
@@ -334,13 +340,67 @@ async function load() {
     setStatus('동기화됨 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
   } catch { setStatus('⚠️ 서버에 연결하지 못했어요. 저장된 목록을 보여드려요.'); }
 }
-async function send(payload) {
+/* ---------- 저장 확인 ---------- */
+// 앱은 저장 응답을 받지 않으므로(no-cors), 저장 뒤에 서버 목록을 다시 받아 변경이 실제로 반영됐는지 비교한다.
+let failedOps = [];            // 서버에 반영되지 않은 변경 [{ op, label }]
+const opSeq = {};              // 재료별 최신 작업 번호. 그 사이 같은 재료에 새 작업이 있으면 이전 확인은 건너뛴다
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const same = (a, b) => String(a ?? '') === String(b ?? '');
+const OP_NAME = { add: '추가', update: '수정', done: '처리', remove: '삭제' };
+
+function applied(op, list) {
+  const it = list.find(i => i.id === op.id);
+  if (op.action === 'add' || op.action === 'update')
+    return !!it && same(it.name, op.name) && same(it.qty, op.qty) && same(it.loc, op.loc)
+      && same(normDate(it.expiry), normDate(op.expiry)) && same(normDate(it.added), normDate(op.added));
+  return !it; // 먹음·버림·삭제는 '보관중' 목록에서 사라져야 한다
+}
+function renderWarn() {
+  const w = $('saveWarn');
+  if (!failedOps.length) { w.hidden = true; return; }
+  const list = failedOps.map(f => `${esc(f.label || '재료')} (${OP_NAME[f.op.action] || ''})`).join(', ');
+  w.hidden = false;
+  w.innerHTML = `⚠️ <b>시트에 저장되지 않은 변경 ${failedOps.length}건</b><br>${list}<br>
+    <span style="font-size:13px">연결을 확인해 보세요. 추가·먹음·버림은 되는데 <b>수정·삭제·이동만 안 된다면</b> 구글 Apps Script를 최신 코드로 다시 배포해야 해요.</span>
+    <div class="row"><button class="primary" id="retryBtn">다시 시도</button><button class="primary" id="dismissBtn" style="background:var(--text3)">닫기</button></div>
+    <span style="font-size:12px">닫으면 저장 안 된 변경은 서버 내용으로 되돌아가요.</span>`;
+}
+function markFailed(op, label) {
+  failedOps = failedOps.filter(f => f.op.id !== op.id);
+  failedOps.push({ op, label }); renderWarn();
+  setStatus('⚠️ 시트에 저장되지 않은 변경이 있어요.');
+}
+async function verify(op, label, seq) {
+  for (const wait of [2000, 3000]) {
+    await sleep(wait);
+    if (opSeq[op.id] !== seq) return;
+    try {
+      const data = await (await fetch(`${URL_}?t=${Date.now()}`)).json();
+      if (!data.items) break;
+      if (applied(op, data.items)) {
+        failedOps = failedOps.filter(f => f.op.id !== op.id); renderWarn();
+        setStatus('저장 확인됨 ✓ ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+        return;
+      }
+    } catch { setStatus('저장됐는지 확인하지 못했어요. 인터넷 연결을 확인해 주세요.'); return; }
+  }
+  markFailed(op, label);
+}
+async function send(payload, label) {
   if (!URL_) return;
+  const seq = opSeq[payload.id] = (opSeq[payload.id] || 0) + 1;
   // no-cors: Apps Script는 POST 응답을 리다이렉트하는데 iOS 사파리가 이를 오류로 처리함.
   // 저장 자체는 성공하고 응답은 필요 없으므로 불투명 응답으로 받는다.
   try { await fetch(URL_, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); }
-  catch { setStatus('⚠️ 서버에 연결하지 못해 저장하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+  catch { setStatus('⚠️ 서버에 연결하지 못해 저장하지 못했어요.'); markFailed(payload, label); return; }
+  verify(payload, label, seq); // 기다리지 않고 뒤에서 확인한다
 }
+document.addEventListener('click', async e => {
+  if (e.target.id === 'retryBtn') {
+    const todo = failedOps; failedOps = []; renderWarn(); setStatus('다시 저장하는 중…');
+    for (const f of todo) await send(f.op, f.label);
+  } else if (e.target.id === 'dismissBtn') { failedOps = []; renderWarn(); load(); }
+});
 
 /* ---------- 이벤트 ---------- */
 let kind = 'expiry';
@@ -395,7 +455,7 @@ async function addItem() {
   items.push(item); store.set('fridgeItems', items); render();
   $('name').value = ''; $('qty').value = ''; $('year').value = ''; $('mon').value = ''; $('day').value = '';
   updatePreview();
-  await send({ action: 'add', ...item });
+  await send({ action: 'add', ...item }, item.name);
 }
 $('addBtn').onclick = addItem;
 $('name').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
@@ -412,7 +472,7 @@ async function finishItem(id, status) {
     waste.push({ name: it.name, loc: it.loc, by: WHO, added: it.added || '', date });
     store.set('fridgeWaste', waste); if (!$('stats').hidden) renderStats();
   }
-  await send({ action: 'done', id, status, date });
+  await send({ action: 'done', id, status, date }, it && it.name);
 }
 
 /* ---------- 수정 / 삭제 ---------- */
@@ -448,13 +508,13 @@ $('editSave').onclick = async () => {
   if (err) { $('editErr').textContent = '⚠️ ' + err; return; }
   Object.assign(it, { name, qty: $('eQty').value.trim(), loc: eLoc, expiry: ex.date, added: md.date || it.added || fmt(today()) });
   store.set('fridgeItems', items); render(); closeEdit();
-  await send({ action: 'update', id: it.id, name: it.name, qty: it.qty, loc: it.loc, expiry: it.expiry, added: it.added });
+  await send({ action: 'update', id: it.id, name: it.name, qty: it.qty, loc: it.loc, expiry: it.expiry, added: it.added }, it.name);
 };
 $('editDelete').onclick = async () => {
   const it = items.find(x => x.id === editId); if (!it) return closeEdit();
   if (!confirm(`"${it.name}"을(를) 삭제할까요?\n통계에도 남지 않아요.`)) return;
   items = items.filter(x => x.id !== it.id); store.set('fridgeItems', items); render(); closeEdit();
-  await send({ action: 'remove', id: it.id });
+  await send({ action: 'remove', id: it.id }, it.name);
 };
 $('editCancel').onclick = closeEdit;
 $('editModal').addEventListener('click', e => { if (e.target === $('editModal')) closeEdit(); });
@@ -485,7 +545,7 @@ $('moveOk').onclick = async () => {
     if (!r.date) patch.added = fmt(today()); // 유통기한을 비우면 오늘부터 일수를 센다
   }
   Object.assign(it, patch); store.set('fridgeItems', items); render(); closeMove();
-  await send({ action: 'update', id: it.id, name: it.name, qty: it.qty, loc: it.loc, expiry: it.expiry, added: it.added });
+  await send({ action: 'update', id: it.id, name: it.name, qty: it.qty, loc: it.loc, expiry: it.expiry, added: it.added }, it.name);
 };
 $('moveCancel').onclick = closeMove;
 $('moveModal').addEventListener('click', e => { if (e.target === $('moveModal')) closeMove(); });
