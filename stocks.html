@@ -514,6 +514,24 @@
     <div class="table-scroll" id="realized" style="margin-top:1rem"></div>
   </div>
   </div>
+
+  <div id="recDividends" style="display:none">
+  <div class="card">
+    <div class="card-label">배당금 기록</div>
+    <div class="form-grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) auto">
+      <div class="field"><label>계좌</label><select id="dAcct" onchange="divPreview()"></select></div>
+      <div class="field"><label>날짜</label><input type="date" id="dDate"></div>
+      <div class="field"><label>종목</label><input id="dName" placeholder="예: 삼성전자"></div>
+      <div class="field"><label id="dGrossLabel">세전 배당금</label><input type="number" id="dGross" min="0" step="any" inputmode="decimal" oninput="divPreview()"></div>
+      <div class="field"><label>세금 (비우면 자동)</label><input type="number" id="dTax" min="0" step="any" inputmode="decimal" placeholder="자동" oninput="divPreview()"></div>
+      <button class="btn" onclick="addDividend()">기록</button>
+    </div>
+    <label style="display:flex;gap:6px;align-items:center;margin-top:.5rem;font-size:13px"><input type="checkbox" id="dCash" checked> 세후 금액을 이 계좌 예수금에 더하기</label>
+    <div class="plan-preview" id="divPreview">세후 금액만 총손익과 수익률에 반영돼요. 세금은 국내 15.4%, 미국 15%로 자동 계산하고, 실제 금액이 다르면 직접 입력해 주세요.</div>
+    <div class="table-scroll" id="divStats" style="margin-top:1rem"></div>
+    <div class="table-scroll" id="dividends" style="margin-top:1rem"></div>
+  </div>
+  </div>
   </section>
 </div>
 
@@ -532,12 +550,12 @@ const ACCT = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 const LS_KEY = 'stockDashboardState', LS_URL = 'stockDashboardUrl';
 
 const DEFAULT_SECTORS = ['반도체','IT/소프트웨어','인터넷/플랫폼','2차전지','자동차','바이오/헬스케어','금융','에너지','소비재','통신','산업재','방산','부동산/리츠','ETF(지수)','ETF(섹터)','기타'];
-let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], transfers: [], fees: { krComm: 0.015, krTax: 0.15, usComm: 0.25, usTax: 0 }, trade: { riskPct: 1, minRR: 2, maxPosPct: 30, weightPct: 5, base: 0 } };
+let state = { rate: 1400, holdings: [], realized: [], snapshots: [], daily: [], flows: [], cash: {}, plans: [], trades: [], journal: [], transfers: [], dividends: [], fees: { krComm: 0.015, krTax: 0.15, usComm: 0.25, usTax: 0 }, trade: { riskPct: 1, minRR: 2, maxPosPct: 30, weightPct: 5, base: 0 } };
 function normalize() {
   state.holdings = state.holdings || []; state.realized = state.realized || [];
   state.snapshots = state.snapshots || []; state.flows = state.flows || []; state.daily = state.daily || [];
   state.cash = state.cash || {};
-  state.plans = state.plans || []; state.trades = state.trades || []; state.journal = state.journal || []; state.transfers = state.transfers || [];
+  state.plans = state.plans || []; state.trades = state.trades || []; state.journal = state.journal || []; state.transfers = state.transfers || []; state.dividends = state.dividends || [];
   state.plans.forEach(p => { if (!p.account) p.account = 'mirae'; });          // 예전에 만든 후보는 미래에셋 계좌로
   state.fees = { krComm: 0.015, krTax: 0.15, usComm: 0.25, usTax: 0, ...(state.fees || {}) };
   state.trade = { riskPct: 1, minRR: 2, maxPosPct: 30, weightPct: 5, base: 0, ...(state.trade || {}) };
@@ -567,7 +585,7 @@ function setSync(msg, err) { const el = document.getElementById('sync'); el.text
 const syncRev = () => { const v = localStorage.getItem(LS_SYNC); return v === null ? NaN : Number(v); };
 const setSyncRev = r => { try { localStorage.setItem(LS_SYNC, String(r)); } catch (e) {} };
 const isDirty = () => !isNaN(syncRev()) && (Number(state.rev) || 0) > syncRev();
-const hasData = st => ['holdings', 'realized', 'journal', 'trades', 'plans', 'flows', 'transfers'].some(k => (st[k] || []).length);
+const hasData = st => ['holdings', 'realized', 'journal', 'trades', 'plans', 'flows', 'transfers', 'dividends'].some(k => (st[k] || []).length);
 
 function updateBadge() {
   const el = document.getElementById('syncBadge'); if (!el) return;
@@ -633,7 +651,7 @@ async function pushState() {
 /* 시트 ↔ 이 기기 대조 */
 function localHasExtra(local, remote) {                              // 이 기기에만 있고 시트에는 없는 기록이 있는지
   const idset = arr => new Set((arr || []).map(x => x.id));
-  for (const k of ['journal', 'trades', 'realized', 'flows', 'transfers', 'plans']) { const r = idset(remote[k]); if ((local[k] || []).some(x => !r.has(x.id))) return true; }
+  for (const k of ['journal', 'trades', 'realized', 'flows', 'transfers', 'dividends', 'plans']) { const r = idset(remote[k]); if ((local[k] || []).some(x => !r.has(x.id))) return true; }
   const rh = new Map((remote.holdings || []).map(h => [h.id, h]));
   return (local.holdings || []).some(h => { const o = rh.get(h.id); return !o || Math.abs(o.qty - h.qty) > 1e-9 || Math.abs(o.avg - h.avg) > 1e-6; });
 }
@@ -703,6 +721,7 @@ function onlyIn(a, b) {                                               // a에만
   add('실현손익', a.realized, b.realized, x => `${x.name} (${x.date})`);
   add('입출금', a.flows, b.flows, x => `${x.type === 'in' ? '입금' : '출금'} (${x.date})`);
   add('이체', a.transfers, b.transfers, x => `(${x.date})`);
+  add('배당', a.dividends, b.dividends, x => `${x.name || ''} (${x.date})`);
   add('관심 종목', a.plans, b.plans, x => x.name);
   const bh = new Map((b.holdings || []).map(h => [h.id, h]));
   (a.holdings || []).forEach(h => { const o = bh.get(h.id); if (!o) out.push(`보유 · ${h.name} 추가`); else if (Math.abs(o.qty - h.qty) > 1e-9) out.push(`보유 · ${h.name} 수량 ${o.qty}→${h.qty}`); });
@@ -862,7 +881,7 @@ function importJson(input) {
       const d = JSON.parse(r.result);
       if (!Array.isArray(d.holdings) || !Array.isArray(d.realized)) throw 0;
       if (!confirm('현재 데이터를 가져온 파일로 덮어쓸까요?')) return;
-      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], transfers: Array.isArray(d.transfers) ? d.transfers : [], fees: d.fees || {}, trade: d.trade || {} };
+      state = { rate: Number(d.rate) || 1400, holdings: d.holdings, realized: d.realized, snapshots: Array.isArray(d.snapshots) ? d.snapshots : [], flows: Array.isArray(d.flows) ? d.flows : [], daily: Array.isArray(d.daily) ? d.daily : [], cash: d.cash || {}, plans: Array.isArray(d.plans) ? d.plans : [], trades: Array.isArray(d.trades) ? d.trades : [], journal: Array.isArray(d.journal) ? d.journal : [], transfers: Array.isArray(d.transfers) ? d.transfers : [], dividends: Array.isArray(d.dividends) ? d.dividends : [], fees: d.fees || {}, trade: d.trade || {} };
       normalize();
       persist(); render();
     } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
@@ -962,6 +981,12 @@ function xferSum(accId, upToMonth) {                             // 계좌 간 �
   });
   return r;
 }
+/* 배당: 세후 금액만 손익에 반영. 입금 기록이 있는 계좌에서 예수금에 이미 더한 배당은 현금 잔고로 잡히니 중복해서 더하지 않는다. */
+const DIV_TAX = { KRW: 15.4, USD: 15 };
+const hasDepOf = id => state.flows.some(f => f.account === id && f.type === 'in');
+function divSum(accId, upToMonth, onlyExtra) {                    // 원화 환산 세후 배당 합계
+  return state.dividends.reduce((s, d) => (d.account === accId && ACCT[accId] && (!upToMonth || d.date.slice(0, 7) <= upToMonth) && (!onlyExtra || !hasDepOf(accId) || d.inCash === false)) ? s + toKRW(d.net, accId) : s, 0);
+}
 function compute() {
   const per = Object.fromEntries(ACCOUNTS.map(a => [a.id, { value:0, cost:0, realized:0 }]));
   state.holdings.forEach(h => {
@@ -970,18 +995,18 @@ function compute() {
     per[h.account].cost  += toKRW(h.qty * h.avg, h.account);
   });
   state.realized.forEach(r => { if (per[r.account]) per[r.account].realized += toKRW(r.amount, r.account); });
-  const total = { value:0, cost:0, realized:0, cash:0, dep:0, wd:0, perf:0, base:0 };
+  const total = { value:0, cost:0, realized:0, cash:0, dep:0, wd:0, perf:0, base:0, div:0 };
   ACCOUNTS.forEach(a => {
     const p = per[a.id];
     p.cash = toKRW(Number(state.cash[a.id]) || 0, a.id);
     p.dep = flowSum(a.id, 'in'); p.wd = flowSum(a.id, 'out');
     const xs = xferSum(a.id); p.tIn = xs.in; p.tOut = xs.out; p.fee = xs.fee;
-    p.hasDep = state.flows.some(f => f.account === a.id && f.type === 'in');
+    p.hasDep = hasDepOf(a.id); p.div = divSum(a.id);
     p.unreal = p.value - p.cost; p.ret = p.cost ? p.unreal / p.cost * 100 : 0;
-    p.perf = (p.hasDep ? p.value + p.cash + p.wd + p.tOut - p.dep - p.tIn : p.unreal + p.realized) - p.fee;   // 이체는 중립, 수수료만 손실
+    p.perf = (p.hasDep ? p.value + p.cash + p.wd + p.tOut - p.dep - p.tIn : p.unreal + p.realized) + divSum(a.id, null, true) - p.fee;   // 이체는 중립, 수수료만 손실
     p.base = p.hasDep ? p.dep + p.tIn : p.cost;
     p.perfRet = p.base ? p.perf / p.base * 100 : 0;
-    for (const k of ['value','cost','realized','cash','dep','wd','perf','base']) total[k] += p[k];
+    for (const k of ['value','cost','realized','cash','dep','wd','perf','base','div']) total[k] += p[k];
   });
   total.unreal = total.value - total.cost; total.ret = total.cost ? total.unreal / total.cost * 100 : 0;
   total.perfRet = total.base ? total.perf / total.base * 100 : 0;
@@ -1002,7 +1027,7 @@ function render() {
   document.getElementById('summary').innerHTML = `
     <div class="stat s1"><div class="stat-label">총 평가금액</div><div class="stat-value">${fmtKRW(total.value)}</div><div class="stat-sub" style="color:var(--text-muted)">투자원금 ${fmtKRW(total.cost)}${total.cash ? ` · 현금 ${fmtKRW(total.cash)}` : ''}</div></div>
     <div class="stat s3"><div class="stat-label">평가손익</div><div class="stat-value ${cls(total.unreal)}">${signKRW(total.unreal)}</div><div class="stat-sub ${cls(total.unreal)}">${fmtPct(total.ret)}</div></div>
-    <div class="stat s3"><div class="stat-label">실현손익</div><div class="stat-value ${cls(total.realized)}">${signKRW(total.realized)}</div></div>
+    <div class="stat s3"><div class="stat-label">실현손익</div><div class="stat-value ${cls(total.realized)}">${signKRW(total.realized)}</div>${total.div ? `<div class="stat-sub ${cls(total.div)}">배당 ${signKRW(total.div)}</div>` : ''}</div>
     <div class="stat s3"><div class="stat-label">누적 출금 (회수)</div><div class="stat-value">${fmtKRW(total.wd)}</div><div class="stat-sub" style="color:var(--text-muted)">누적 입금 ${fmtKRW(total.dep)}</div></div>
     <div class="stat s2"><div class="stat-label">총손익</div><div class="stat-value ${cls(total.perf)}">${signKRW(total.perf)}</div><div class="stat-sub ${cls(total.perf)}">${fmtPct(total.perfRet)}</div></div>`;
 
@@ -1013,6 +1038,7 @@ function render() {
       <div class="acct-value">${fmtKRW(p.value)}</div>
       <div class="acct-line ${cls(p.unreal)}">${signKRW(p.unreal)} (${fmtPct(p.ret)})</div>
       <div class="acct-line">실현 <span class="${cls(p.realized)}">${signKRW(p.realized)}</span></div>
+      ${p.div ? `<div class="acct-line">배당 누계 <span class="up">${signKRW(p.div)}</span></div>` : ''}
       ${p.cash ? `<div class="acct-line">현금 ${fmtKRW(p.cash)}</div>` : ''}
       ${p.wd ? `<div class="acct-line">출금 누계 ${fmtKRW(p.wd)}</div>` : ''}
       <div class="acct-line">총손익 <span class="${cls(p.perf)}">${signKRW(p.perf)} (${fmtPct(p.perfRet)})</span></div>
@@ -1032,6 +1058,7 @@ function render() {
   renderFeeCard();
   renderFlows();
   renderRealized();
+  renderDividends();
 }
 
 /* ---------- 입출금 · 현금 ---------- */
@@ -1971,9 +1998,9 @@ function delJournal(id) {
 function setRecTab(t) { recTab = t; renderRecords(); }
 function setJf(k, v) { jf[k] = v; renderJournalList(); }
 function renderRecords() {
-  document.getElementById('recTabs').innerHTML = [['journal', '📝 매매 일지'], ['flows', '💰 입출금'], ['realized', '📈 실현손익']]
+  document.getElementById('recTabs').innerHTML = [['journal', '📝 매매 일지'], ['flows', '💰 입출금'], ['realized', '📈 실현손익'], ['dividends', '💵 배당']]
     .map(([id, name]) => `<button class="tab ${recTab === id ? 'active' : ''}" onclick="setRecTab('${id}')">${name}</button>`).join('');
-  ['Journal', 'Flows', 'Realized'].forEach(n => document.getElementById('rec' + n).style.display = recTab === n.toLowerCase() ? '' : 'none');
+  ['Journal', 'Flows', 'Realized', 'Dividends'].forEach(n => document.getElementById('rec' + n).style.display = recTab === n.toLowerCase() ? '' : 'none');
   if (recTab === 'journal') {
     const sel = document.getElementById('jfAcct'); if (!sel.options.length) sel.innerHTML = '<option value="all">전체 계좌</option>' + ACCOUNTS.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
     const tag = document.getElementById('jfTag');
@@ -2044,11 +2071,11 @@ function monthlyRows() {
       const x = sn.accounts[id]; if (!x) return;
       const cash = x.cash || 0, out = flowSum(id, 'out', sn.month), inn = flowSum(id, 'in', sn.month), xs = xferSum(id, sn.month);
       value += x.value + cash; wd += out;
-      if (hasDep(id)) { total += x.value + cash + out + xs.out - inn - xs.in - xs.fee; base += inn + xs.in; }
+      if (hasDep(id)) { total += x.value + cash + out + xs.out - inn - xs.in - xs.fee + divSum(id, sn.month, true); base += inn + xs.in; }
       else {
         let realized = 0;
         state.realized.forEach(r => { if (r.account === id && r.date.slice(0, 7) <= sn.month) realized += toKRW(r.amount, id); });
-        total += x.value - x.cost + realized - xs.fee; base += x.cost;
+        total += x.value - x.cost + realized - xs.fee + divSum(id, sn.month, true); base += x.cost;
       }
     });
     const row = { month: sn.month, value, wd, total, ret: base ? total / base * 100 : 0, delta: prev === null ? null : total - prev };
@@ -2220,6 +2247,53 @@ function renderSectors() {
         <td>${x.isCash ? '-' : x.count + '개'}</td><td class="${cls(pnl)}">${x.isCash ? '-' : signKRW(pnl)}</td></tr>`; }).join('') + '</tbody></table>';
 }
 
+/* ---------- 배당 ---------- */
+function divCalc() {
+  const ac = val('dAcct'), a = ACCT[ac], gross = num('dGross'), t = parseFloat(document.getElementById('dTax').value);
+  if (!a || !(gross > 0)) return null;
+  const tax = t >= 0 ? t : Math.round(gross * DIV_TAX[a.cur] / 100 * 100) / 100;
+  return { ac, a, gross, tax, net: Math.round((gross - tax) * 100) / 100, auto: !(t >= 0) };
+}
+function divPreview() {
+  const el = document.getElementById('divPreview'), c = divCalc(), a = ACCT[val('dAcct')];
+  if (a) document.getElementById('dGrossLabel').textContent = a.cur === 'USD' ? '세전 배당금 (USD)' : '세전 배당금 (원)';
+  if (!c) { el.textContent = '세후 금액만 총손익과 수익률에 반영돼요. 세금은 국내 15.4%, 미국 15%로 자동 계산하고, 실제 금액이 다르면 직접 입력해 주세요.'; return; }
+  el.innerHTML = `세금 ${fmtCash(c.tax, c.ac)}${c.auto ? ` (${DIV_TAX[c.a.cur]}% 자동)` : ''} → 세후 <b>${fmtCash(c.net, c.ac)}</b>`;
+}
+function addDividend() {
+  const date = val('dDate'), c = divCalc();
+  if (!date || !c) { alert('날짜와 세전 배당금(0보다 큰 값)을 입력해 주세요.'); return; }
+  if (c.tax > c.gross) { alert('세금이 배당금보다 클 수 없어요.'); return; }
+  const inCash = document.getElementById('dCash').checked;
+  state.dividends.push({ id: uid(), account: c.ac, date, name: val('dName').trim(), gross: c.gross, tax: c.tax, net: c.net, inCash });
+  if (inCash) state.cash[c.ac] = Math.round(((Number(state.cash[c.ac]) || 0) + c.net) * 100) / 100;
+  document.getElementById('dGross').value = ''; document.getElementById('dTax').value = ''; document.getElementById('dName').value = '';
+  persist(); render();
+}
+function delDividend(id) {
+  const d = state.dividends.find(x => x.id === id); if (!d) return;
+  if (!confirm('이 배당 기록을 삭제할까요?' + (d.inCash ? '\n(예수금에서 세후 금액도 함께 뺍니다)' : ''))) return;
+  if (d.inCash) state.cash[d.account] = Math.max(0, Math.round(((Number(state.cash[d.account]) || 0) - d.net) * 100) / 100);
+  state.dividends = state.dividends.filter(x => x.id !== id); persist(); render();
+}
+function renderDividends() {
+  if (!document.getElementById('dAcct').options.length) document.getElementById('dAcct').innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  if (!document.getElementById('dDate').value) document.getElementById('dDate').value = todayStr();
+  divPreview();
+  const rows = state.dividends.filter(d => ACCT[d.account]).slice().sort((a, b) => b.date.localeCompare(a.date));
+  if (!rows.length) { document.getElementById('divStats').innerHTML = ''; document.getElementById('dividends').innerHTML = '<div class="empty">배당 기록이 없습니다.</div>'; return; }
+  const byY = {}, byM = {};
+  rows.forEach(d => { const k = toKRW(d.net, d.account); byY[d.date.slice(0, 4)] = (byY[d.date.slice(0, 4)] || 0) + k; byM[d.date.slice(0, 7)] = (byM[d.date.slice(0, 7)] || 0) + k; });
+  const months = Object.keys(byM).sort().reverse(), years = Object.keys(byY).sort().reverse();
+  document.getElementById('divStats').innerHTML = `<table><thead><tr><th style="text-align:left">기간</th><th>세후 배당 (원화 환산)</th></tr></thead><tbody>` +
+    years.map(y => `<tr><td style="text-align:left"><b>${y}년 누적</b></td><td class="up"><b>+${fmtKRW(byY[y])}</b></td></tr>`).join('') +
+    months.slice(0, 12).map(m => `<tr><td style="text-align:left">${m}</td><td class="up">+${fmtKRW(byM[m])}</td></tr>`).join('') + '</tbody></table>';
+  document.getElementById('dividends').innerHTML = `<table><thead><tr><th>날짜</th><th>계좌</th><th style="text-align:left">종목</th><th>세전</th><th>세금</th><th>세후</th><th></th></tr></thead><tbody>` +
+    rows.map(d => { const a = ACCT[d.account];
+      return `<tr><td>${esc(d.date)}</td><td style="text-align:left"><span class="dot" style="--c:${a.color}"></span>${a.name}</td><td style="text-align:left">${esc(d.name)}</td>
+        <td>${fmtNum(d.gross, a.cur)}</td><td>${fmtNum(d.tax, a.cur)}</td><td class="up">+${fmtNum(d.net, a.cur)}</td>
+        <td><button class="del" onclick="delDividend('${d.id}')" title="삭제">✕</button></td></tr>`; }).join('') + '</tbody></table>';
+}
 function renderRealized() {
   const rows = state.realized.filter(r => ACCT[r.account]).slice().sort((a, b) => b.date.localeCompare(a.date));
   document.getElementById('rAmtLabel').textContent = '손익 금액 (신한은 USD)';
