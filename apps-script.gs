@@ -49,6 +49,7 @@ function doPost(e) {
   try {
     const ids = () => s.getRange(1, 1, s.getLastRow(), 1).getValues().flat();
     if (d.action === 'add') {
+      if (ids().indexOf(d.id) > 0) return out_({ ok: true }); // 이미 있으면 다시 넣지 않음 (재시도 대비)
       s.appendRow([d.id, d.name, d.qty, d.loc, d.expiry, d.by, d.added || new Date(), '보관중']);
     } else if (d.action === 'done') { // status: 먹음 | 버림
       const i = ids().indexOf(d.id);
