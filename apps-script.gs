@@ -66,6 +66,6 @@ function doPost(e) {
       const i = ids().indexOf(d.id);
       if (i > 0) s.deleteRow(i + 1);
     }
-  } finally { lock.release(); }
+  } finally { lock.releaseLock(); }
   return out_({ ok: true });
 }
